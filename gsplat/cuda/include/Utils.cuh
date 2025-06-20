@@ -135,6 +135,274 @@ template <class WarpT> inline __device__ void warpMax(float &val, WarpT &warp) {
     val = cg::reduce(warp, val, cg::greater<float>());
 }
 
+
+// --- Warp Reduction Helpers ---
+
+// Helper to find the lowest active lane in a mask (leader election)
+// Using 'inline' to avoid multiple definition errors across compilation units.
+// __device__ inline int get_leader_lane_id(unsigned int mask) {
+//     if (mask == 0) return -1;
+//     return __ffs(mask) - 1; // __ffs(mask) returns (index + 1) of the first set bit
+// }
+
+inline __device__ int get_leader_lane_id(unsigned int mask) {  
+    // Return first active lane in the mask, or -1 if mask is empty  
+    return mask ? __ffs(mask) - 1 : -1;  // __ffs returns 1-based position of first set bit  
+}  
+
+
+// --- Manual Dynamic Labeled Reduction Implementations ---
+// These are provided for comparison if cooperative_groups::labeled_partition is not available
+// or for specific performance tuning, though `labeled_partition` is generally efficient.
+inline __device__ void manual_dynamic_reduce_sum_vec2(  
+    vec2&              val_in_out,  
+    long long          current_label,  
+    int                warp_thread_id,  
+    unsigned int       warp_active_mask  
+) {  
+    // First, create a mask of all threads with matching labels  
+    unsigned int my_label_mask = 0;  
+    for (int i = 0; i < 32; ++i) {  
+        if (warp_active_mask & (1U << i)) {  
+            long long lane_label = __shfl_sync(warp_active_mask, current_label, i);  
+            if (lane_label == current_label) {  
+                my_label_mask |= (1U << i);  
+            }  
+        }  
+    }  
+      
+    // If this thread doesn't have this label or no threads have this label, return early  
+    if (my_label_mask == 0 || !(my_label_mask & (1U << warp_thread_id))) {  
+        return;  
+    }  
+      
+    // Find the leader lane for this label group  
+    int leader_lane = get_leader_lane_id(my_label_mask);  
+      
+    // Perform a more robust reduction with explicit control  
+    float sum_x = val_in_out.x;  
+    float sum_y = val_in_out.y;  
+      
+    // Use a mask-based reduction approach with progressive halving  
+    for (int mask = my_label_mask & ~(1U << warp_thread_id); mask != 0; ) {  
+        int src_lane = __ffs(mask) - 1;  
+        mask &= ~(1U << src_lane);  
+          
+        sum_x += __shfl_sync(my_label_mask, val_in_out.x, src_lane);  
+        sum_y += __shfl_sync(my_label_mask, val_in_out.y, src_lane);  
+    }  
+      
+    // Leader thread accumulates the final sum  
+    if (warp_thread_id == leader_lane) {  
+        val_in_out.x = sum_x;  
+        val_in_out.y = sum_y;  
+    }  
+      
+    // Broadcast the result from the leader to all threads with the same label  
+    val_in_out.x = __shfl_sync(my_label_mask, val_in_out.x, leader_lane);  
+    val_in_out.y = __shfl_sync(my_label_mask, val_in_out.y, leader_lane);  
+} 
+
+// inline __device__ void manual_dynamic_reduce_sum_float(
+//     float&             val_in_out,
+//     long long          current_label,
+//     int                warp_thread_id,
+//     unsigned int       warp_active_mask
+// ) {
+//     float sum_for_my_label = val_in_out;
+
+//     // Build mask for threads with the same label within the warp
+//     unsigned int my_label_mask = 0;
+//     for (int i = 0; i < 32; ++i) {
+//         long long lane_label = __shfl_sync(warp_active_mask, current_label, i);
+//         if ((warp_active_mask & (1U << i)) && (lane_label == current_label)) {
+//             my_label_mask |= (1U << i);
+//         }
+//     }
+
+//     // Perform warp-level sum for current_label group
+//     for (int delta = 16; delta > 0; delta /= 2) {
+//         sum_for_my_label += __shfl_down_sync(my_label_mask, sum_for_my_label, delta);
+//     }
+
+//     // Only the leader of the label group writes the sum
+//     if (warp_thread_id == get_leader_lane_id(my_label_mask)) {
+//         val_in_out = sum_for_my_label;
+//     }
+// }
+
+inline __device__ void manual_dynamic_reduce_sum_vec3(  
+    vec3&              val_in_out,  
+    long long          current_label,  
+    int                warp_thread_id,  
+    unsigned int       warp_active_mask  
+) {  
+    // First, create a mask of all threads with matching labels  
+    unsigned int my_label_mask = 0;  
+    for (int i = 0; i < 32; ++i) {  
+        if (warp_active_mask & (1U << i)) {  
+            long long lane_label = __shfl_sync(warp_active_mask, current_label, i);  
+            if (lane_label == current_label) {  
+                my_label_mask |= (1U << i);  
+            }  
+        }  
+    }  
+      
+    // If this thread doesn't have this label or no threads have this label, return early  
+    if (my_label_mask == 0 || !(my_label_mask & (1U << warp_thread_id))) {  
+        return;  
+    }  
+      
+    // Find the leader lane for this label group  
+    int leader_lane = get_leader_lane_id(my_label_mask);  
+      
+    // Perform a more robust reduction with explicit control  
+    float sum_x = val_in_out.x;  
+    float sum_y = val_in_out.y;  
+    float sum_z = val_in_out.z;  
+      
+    // Use a mask-based reduction approach with progressive halving  
+    for (int mask = my_label_mask & ~(1U << warp_thread_id); mask != 0; ) {  
+        int src_lane = __ffs(mask) - 1;  
+        mask &= ~(1U << src_lane);  
+          
+        sum_x += __shfl_sync(my_label_mask, val_in_out.x, src_lane);  
+        sum_y += __shfl_sync(my_label_mask, val_in_out.y, src_lane);  
+        sum_z += __shfl_sync(my_label_mask, val_in_out.z, src_lane);  
+    }  
+      
+    // Leader thread accumulates the final sum  
+    if (warp_thread_id == leader_lane) {  
+        val_in_out.x = sum_x;  
+        val_in_out.y = sum_y;  
+        val_in_out.z = sum_z;  
+    }  
+      
+    // Broadcast the result from the leader to all threads with the same label  
+    val_in_out.x = __shfl_sync(my_label_mask, val_in_out.x, leader_lane);  
+    val_in_out.y = __shfl_sync(my_label_mask, val_in_out.y, leader_lane);  
+    val_in_out.z = __shfl_sync(my_label_mask, val_in_out.z, leader_lane);  
+}  
+  
+inline __device__ void manual_dynamic_reduce_sum_vec4(  
+    vec4&              val_in_out,  
+    long long          current_label,  
+    int                warp_thread_id,  
+    unsigned int       warp_active_mask  
+) {  
+    // First, create a mask of all threads with matching labels  
+    unsigned int my_label_mask = 0;  
+    for (int i = 0; i < 32; ++i) {  
+        if (warp_active_mask & (1U << i)) {  
+            long long lane_label = __shfl_sync(warp_active_mask, current_label, i);  
+            if (lane_label == current_label) {  
+                my_label_mask |= (1U << i);  
+            }  
+        }  
+    }  
+      
+    // If this thread doesn't have this label or no threads have this label, return early  
+    if (my_label_mask == 0 || !(my_label_mask & (1U << warp_thread_id))) {  
+        return;  
+    }  
+      
+    // Find the leader lane for this label group  
+    int leader_lane = get_leader_lane_id(my_label_mask);  
+      
+    // Perform a more robust reduction with explicit control  
+    float sum_x = val_in_out.x;  
+    float sum_y = val_in_out.y;  
+    float sum_z = val_in_out.z;  
+    float sum_w = val_in_out.w;  
+      
+    // Use a mask-based reduction approach with progressive halving  
+    for (int mask = my_label_mask & ~(1U << warp_thread_id); mask != 0; ) {  
+        int src_lane = __ffs(mask) - 1;  
+        mask &= ~(1U << src_lane);  
+          
+        sum_x += __shfl_sync(my_label_mask, val_in_out.x, src_lane);  
+        sum_y += __shfl_sync(my_label_mask, val_in_out.y, src_lane);  
+        sum_z += __shfl_sync(my_label_mask, val_in_out.z, src_lane);  
+        sum_w += __shfl_sync(my_label_mask, val_in_out.w, src_lane);  
+    }  
+      
+    // Leader thread accumulates the final sum  
+    if (warp_thread_id == leader_lane) {  
+        val_in_out.x = sum_x;  
+        val_in_out.y = sum_y;  
+        val_in_out.z = sum_z;  
+        val_in_out.w = sum_w;  
+    }  
+      
+    // Broadcast the result from the leader to all threads with the same label  
+    val_in_out.x = __shfl_sync(my_label_mask, val_in_out.x, leader_lane);  
+    val_in_out.y = __shfl_sync(my_label_mask, val_in_out.y, leader_lane);  
+    val_in_out.z = __shfl_sync(my_label_mask, val_in_out.z, leader_lane);  
+    val_in_out.w = __shfl_sync(my_label_mask, val_in_out.w, leader_lane);  
+}  
+  
+inline __device__ void manual_dynamic_reduce_sum_mat3(  
+    mat3&              val_in_out,  
+    long long          current_label,  
+    int                warp_thread_id,  
+    unsigned int       warp_active_mask  
+) {  
+    // First, create a mask of all threads with matching labels  
+    unsigned int my_label_mask = 0;  
+    for (int i = 0; i < 32; ++i) {  
+        if (warp_active_mask & (1U << i)) {  
+            long long lane_label = __shfl_sync(warp_active_mask, current_label, i);  
+            if (lane_label == current_label) {  
+                my_label_mask |= (1U << i);  
+            }  
+        }  
+    }  
+      
+    // If this thread doesn't have this label or no threads have this label, return early  
+    if (my_label_mask == 0 || !(my_label_mask & (1U << warp_thread_id))) {  
+        return;  
+    }  
+      
+    // Find the leader lane for this label group  
+    int leader_lane = get_leader_lane_id(my_label_mask);  
+      
+    // Perform a more robust reduction with explicit control  
+    float sum[3][3];  
+    for (int col = 0; col < 3; ++col) {  
+        for (int row = 0; row < 3; ++row) {  
+            sum[col][row] = val_in_out[col][row];  
+        }  
+    }  
+      
+    // Use a mask-based reduction approach   
+    for (int mask = my_label_mask & ~(1U << warp_thread_id); mask != 0; ) {  
+        int src_lane = __ffs(mask) - 1;  
+        mask &= ~(1U << src_lane);  
+          
+        for (int col = 0; col < 3; ++col) {  
+            for (int row = 0; row < 3; ++row) {  
+                sum[col][row] += __shfl_sync(my_label_mask, val_in_out[col][row], src_lane);  
+            }  
+        }  
+    }  
+      
+    // Leader thread accumulates the final sum  
+    if (warp_thread_id == leader_lane) {  
+        for (int col = 0; col < 3; ++col) {  
+            for (int row = 0; row < 3; ++row) {  
+                val_in_out[col][row] = sum[col][row];  
+            }  
+        }  
+    }  
+      
+    // Broadcast the result from the leader to all threads with the same label  
+    for (int col = 0; col < 3; ++col) {  
+        for (int row = 0; row < 3; ++row) {  
+            val_in_out[col][row] = __shfl_sync(my_label_mask, val_in_out[col][row], leader_lane);  
+        }  
+    }  
+}  
+
 ///////////////////////////////
 // Quaternion
 ///////////////////////////////

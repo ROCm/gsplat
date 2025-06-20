@@ -9,6 +9,12 @@
 #include "Projection2DGS.cuh" // Utils for 2DGS Projection
 #include "Utils.cuh"
 
+#define USE_MANUAL_LABELED_PARTITION 1
+#define DEBUG_PRINT 0
+#ifdef DEBUG_PRINT
+#include <cstdio> // Only include cstdio if DEBUG_PRINT is enabled
+#endif
+
 namespace gsplat {
 
 namespace cg = cooperative_groups;
@@ -433,6 +439,57 @@ __global__ void projection_2dgs_fused_bwd_kernel(
     // #if __CUDA_ARCH__ >= 700
     // write out results with warp-level reduction
     auto warp = cg::tiled_partition<32>(cg::this_thread_block());
+
+    // Get warp context for dynamic reductions
+    unsigned int warp_thread_id = threadIdx.x % 32;
+    unsigned int warp_active_mask = __activemask();
+
+    #if USE_MANUAL_LABELED_PARTITION
+    if (v_means != nullptr) {
+        manual_dynamic_reduce_sum_vec3(v_mean, gid, warp_thread_id, warp_active_mask);
+
+        // Elect a leader for atomic write to global memory.
+        unsigned int my_gid_mask = 0;
+        for (int i = 0; i < 32; ++i) {
+            long long lane_gid_temp = __shfl_sync(warp_active_mask, gid, i);
+            if ((warp_active_mask & (1U << i)) && (lane_gid_temp == gid)) {
+                my_gid_mask |= (1U << i);
+            }
+        }
+        int my_warp_leader_lane_id = get_leader_lane_id(my_gid_mask);
+
+        if (warp_thread_id == my_warp_leader_lane_id) {
+            scalar_t* target_v_means_ptr = v_means + bid * N * 3 + gid * 3;
+            // --- FIX: Cast float to scalar_t for gpuAtomicAdd ---
+            gpuAtomicAdd(&(target_v_means_ptr[0]), static_cast<scalar_t>(v_mean.x));
+            gpuAtomicAdd(&(target_v_means_ptr[1]), static_cast<scalar_t>(v_mean.y));
+            gpuAtomicAdd(&(target_v_means_ptr[2]), static_cast<scalar_t>(v_mean.z));
+        }
+    }
+    manual_dynamic_reduce_sum_vec4(v_quat, gid, warp_thread_id, warp_active_mask);
+    manual_dynamic_reduce_sum_vec2(v_scale, gid, warp_thread_id, warp_active_mask);
+
+    unsigned int my_gid_mask = 0;
+    for (int i = 0; i < 32; ++i) {
+        long long lane_gid_temp = __shfl_sync(warp_active_mask, gid, i);
+        if ((warp_active_mask & (1U << i)) && (lane_gid_temp == gid)) {
+            my_gid_mask |= (1U << i);
+        }
+    }
+    int my_warp_leader_lane_id = get_leader_lane_id(my_gid_mask);
+
+    if (warp_thread_id == my_warp_leader_lane_id) {
+        scalar_t* target_v_quats_ptr = v_quats + bid * N * 4 + gid * 4;
+        scalar_t* target_v_scales_ptr = v_scales + bid * N * 3 + gid * 3;
+        // --- FIX: Cast float to scalar_t for gpuAtomicAdd ---
+        gpuAtomicAdd(target_v_quats_ptr,     static_cast<scalar_t>(v_quat.x));
+        gpuAtomicAdd(target_v_quats_ptr + 1, static_cast<scalar_t>(v_quat.y));
+        gpuAtomicAdd(target_v_quats_ptr + 2, static_cast<scalar_t>(v_quat.z));
+        gpuAtomicAdd(target_v_quats_ptr + 3, static_cast<scalar_t>(v_quat.w));
+        gpuAtomicAdd(target_v_scales_ptr,    static_cast<scalar_t>(v_scale.x));
+        gpuAtomicAdd(target_v_scales_ptr + 1, static_cast<scalar_t>(v_scale.y));
+    }
+    #else
     auto warp_group_g = cg::labeled_partition(warp, gid);
     if (v_means != nullptr) {
         warpSum(v_mean, warp_group_g);
@@ -458,8 +515,39 @@ __global__ void projection_2dgs_fused_bwd_kernel(
         gpuAtomicAdd(v_scales, v_scale[0]);
         gpuAtomicAdd(v_scales + 1, v_scale[1]);
     }
+    #endif
 
     if (v_viewmats != nullptr) {
+        #if USE_MANUAL_LABELED_PARTITION
+         manual_dynamic_reduce_sum_mat3(v_R, cid, warp_thread_id, warp_active_mask);
+        manual_dynamic_reduce_sum_vec3(v_t, cid, warp_thread_id, warp_active_mask);
+
+        unsigned int my_cid_mask = 0;
+        for (int i = 0; i < 32; ++i) {
+            long long lane_cid_temp = __shfl_sync(warp_active_mask, cid, i);
+            if ((warp_active_mask & (1U << i)) && (lane_cid_temp == cid)) {
+                my_cid_mask |= (1U << i);
+            }
+        }
+        int my_warp_leader_lane_id_cid = get_leader_lane_id(my_cid_mask);
+
+        if (warp_thread_id == my_warp_leader_lane_id_cid) {
+            scalar_t* target_v_viewmats_ptr = v_viewmats + bid * C * 16 + cid * 16;
+            for (uint32_t i = 0; i < 3; i++) { // rows (0, 1, 2)
+                for (uint32_t j = 0; j < 3; j++) { // cols (0, 1, 2) - rotation part
+                    // v_R_local is GLM (column-major). target_v_viewmats_ptr is row-major.
+                    // Access [col][row] for v_R_local to transpose to row-major output.
+                    // --- FIX: Cast float to scalar_t for gpuAtomicAdd ---
+                    gpuAtomicAdd(target_v_viewmats_ptr + i * 4 + j, static_cast<scalar_t>(v_R[j][i]));
+                }
+                // Add translation components to the 4th column (index 3)
+                // --- FIX: Cast float to scalar_t for gpuAtomicAdd ---
+                if (i == 0) gpuAtomicAdd(target_v_viewmats_ptr + i * 4 + 3, static_cast<scalar_t>(v_t.x));
+                if (i == 1) gpuAtomicAdd(target_v_viewmats_ptr + i * 4 + 3, static_cast<scalar_t>(v_t.y));
+                if (i == 2) gpuAtomicAdd(target_v_viewmats_ptr + i * 4 + 3, static_cast<scalar_t>(v_t.z));
+            }
+        }
+        #else
         auto warp_group_c = cg::labeled_partition(warp, cid);
         warpSum(v_R, warp_group_c);
         warpSum(v_t, warp_group_c);
@@ -474,6 +562,7 @@ __global__ void projection_2dgs_fused_bwd_kernel(
                 gpuAtomicAdd(v_viewmats + i * 4 + 3, v_t[i]);
             }
         }
+        #endif
     }
 }
 

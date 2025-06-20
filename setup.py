@@ -13,8 +13,8 @@ exec(open("gsplat/version.py", "r").read())
 URL = "https://github.com/nerfstudio-project/gsplat"
 
 BUILD_NO_CUDA = os.getenv("BUILD_NO_CUDA", "0") == "1"
-WITH_SYMBOLS = os.getenv("WITH_SYMBOLS", "0") == "1"
-LINE_INFO = os.getenv("LINE_INFO", "0") == "1"
+WITH_SYMBOLS =  "1" #os.getenv("WITH_SYMBOLS", "0") == "1"
+LINE_INFO = "1" #os.getenv("LINE_INFO", "0") == "1"
 MAX_JOBS = os.getenv("MAX_JOBS")
 need_to_unset_max_jobs = False
 if not MAX_JOBS:
@@ -69,7 +69,7 @@ def get_extensions():
 
     nvcc_flags = os.getenv("NVCC_FLAGS", "")
     nvcc_flags = [] if nvcc_flags == "" else nvcc_flags.split(" ")
-    nvcc_flags += ["-O3", "--use_fast_math", "-std=c++17"]
+    nvcc_flags += ["-g", "-G", "--use_fast_math", "-std=c++17"]
     if LINE_INFO:
         nvcc_flags += ["-lineinfo"]
     if torch.version.hip:
