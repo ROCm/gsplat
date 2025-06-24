@@ -8,6 +8,12 @@
 #include "Rasterization.h"
 #include "Utils.cuh"
 
+#define USE_MANUAL_LABELED_PARTITION 1
+#define DEBUG_PRINT 0
+#ifdef DEBUG_PRINT
+#include <cstdio> // Only include cstdio if DEBUG_PRINT is enabled
+#endif
+
 namespace gsplat {
 
 namespace cg = cooperative_groups;
@@ -123,8 +129,15 @@ __global__ void rasterize_to_pixels_3dgs_bwd_kernel(
     // each thread loads one gaussian at a time before rasterizing
     const uint32_t tr = block.thread_rank();
     cg::thread_block_tile<32> warp = cg::tiled_partition<32>(block);
+    
+    #if USE_MANUAL_LABELED_PARTITION
+    // Define shared memory array in your kernel  
+    __shared__ int32_t temp[32]; // Size of a warp, adjust if needed  
+    const int32_t warp_bin_final = reduce_max(warp, temp, bin_final);  
+    #else
     const int32_t warp_bin_final =
         cg::reduce(warp, bin_final, cg::greater<int>());
+    #endif
     for (uint32_t b = 0; b < num_batches; ++b) {
         // resync all threads before writing next batch of shared mem
         block.sync();
@@ -241,6 +254,15 @@ __global__ void rasterize_to_pixels_3dgs_bwd_kernel(
                     buffer[k] += rgbs_batch[t * CDIM + k] * fac;
                 }
             }
+            #if USE_MANUAL_LABELED_PARTITION
+            manual_warpSum<CDIM>(v_rgb_local, warp);
+            manual_warpSum(v_conic_local, warp);
+            manual_warpSum(v_xy_local, warp);
+            if (v_means2d_abs != nullptr) {
+                manual_warpSum(v_xy_abs_local, warp);
+            }
+            manual_warpSum(v_opacity_local, warp);
+            #else
             warpSum<CDIM>(v_rgb_local, warp);
             warpSum(v_conic_local, warp);
             warpSum(v_xy_local, warp);
@@ -248,6 +270,7 @@ __global__ void rasterize_to_pixels_3dgs_bwd_kernel(
                 warpSum(v_xy_abs_local, warp);
             }
             warpSum(v_opacity_local, warp);
+            #endif
             if (warp.thread_rank() == 0) {
                 int32_t g = id_batch[t]; // flatten index in [I * N] or [nnz]
                 float *v_rgb_ptr = (float *)(v_colors) + CDIM * g;
