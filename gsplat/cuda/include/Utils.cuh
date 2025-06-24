@@ -229,7 +229,25 @@ inline __device__ void manual_warpSum(vec3& v, const cg::thread_group& warp) {
     v.x = x;  
     v.y = y;  
     v.z = z;  
-}  
+}
+
+// For vec4 type  
+inline __device__ void manual_warpSum(vec4& v, const cg::thread_group& warp) {  
+    float x = v.x;  
+    float y = v.y;  
+    float z = v.z;
+    float w = v.w;  
+      
+    manual_warpSum(x, warp);  
+    manual_warpSum(y, warp);  
+    manual_warpSum(z, warp); 
+    manual_warpSum(w, warp); 
+      
+    v.x = x;  
+    v.y = y;  
+    v.z = z;
+    v.w = w; 
+}
   
 // For array type (like v_rgb_local)  
 template <int N>  

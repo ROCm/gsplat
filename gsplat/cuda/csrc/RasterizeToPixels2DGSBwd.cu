@@ -8,6 +8,12 @@
 #include "Rasterization.h"
 #include "Utils.cuh"
 
+#define USE_MANUAL_LABELED_PARTITION 1
+#define DEBUG_PRINT 0
+#ifdef DEBUG_PRINT
+#include <cstdio> // Only include cstdio if DEBUG_PRINT is enabled
+#endif
+
 namespace gsplat {
 
 namespace cg = cooperative_groups;
@@ -239,8 +245,14 @@ __global__ void rasterize_to_pixels_2dgs_bwd_kernel(
     // find the maximum final gaussian ids in the thread warp.
     // this gives the last gaussian id that have intersected with any pixels in
     // the warp
+    #if USE_MANUAL_LABELED_PARTITION
+    // Define shared memory array in your kernel  
+    __shared__ int32_t temp[32]; // Size of a warp, adjust if needed  
+    const int32_t warp_bin_final = reduce_max(warp, temp, bin_final);  
+    #else
     const int32_t warp_bin_final =
         cg::reduce(warp, bin_final, cg::greater<int>());
+    #endif
 
     /**
      * =======================================================
@@ -614,6 +626,18 @@ __global__ void rasterize_to_pixels_2dgs_bwd_kernel(
              * gaussian
              * ==================================================
              */
+            #if USE_MANUAL_LABELED_PARTITION
+            manual_warpSum<CDIM>(v_rgb_local, warp);
+            manual_warpSum<3>(v_normal_local, warp);
+            manual_warpSum(v_xy_local, warp);
+            manual_warpSum(v_u_M_local, warp);
+            manual_warpSum(v_v_M_local, warp);
+            manual_warpSum(v_w_M_local, warp);
+            if (v_means2d_abs != nullptr) {
+                manual_warpSum(v_xy_abs_local, warp);
+            }
+            manual_warpSum(v_opacity_local, warp);
+            #else
             warpSum<CDIM>(v_rgb_local, warp);
             warpSum<3>(v_normal_local, warp);
             warpSum(v_xy_local, warp);
@@ -624,6 +648,7 @@ __global__ void rasterize_to_pixels_2dgs_bwd_kernel(
                 warpSum(v_xy_abs_local, warp);
             }
             warpSum(v_opacity_local, warp);
+            #endif
             int32_t g = id_batch[t]; // flatten index in [I * N] or [nnz]
 
             /**

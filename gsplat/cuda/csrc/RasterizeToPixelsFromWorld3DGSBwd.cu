@@ -9,6 +9,12 @@
 #include "Utils.cuh"
 #include "Cameras.cuh"
 
+#define USE_MANUAL_LABELED_PARTITION 1
+#define DEBUG_PRINT 0
+#ifdef DEBUG_PRINT
+#include <cstdio> // Only include cstdio if DEBUG_PRINT is enabled
+#endif
+
 namespace gsplat {
 
 namespace cg = cooperative_groups;
@@ -197,8 +203,16 @@ __global__ void rasterize_to_pixels_from_world_3dgs_bwd_kernel(
     // each thread loads one gaussian at a time before rasterizing
     const uint32_t tr = block.thread_rank();
     cg::thread_block_tile<32> warp = cg::tiled_partition<32>(block);
+
+    #if USE_MANUAL_LABELED_PARTITION
+    // Define shared memory array in your kernel  
+    __shared__ int32_t temp[32]; // Size of a warp, adjust if needed  
+    const int32_t warp_bin_final = reduce_max(warp, temp, bin_final);  
+    #else
     const int32_t warp_bin_final =
         cg::reduce(warp, bin_final, cg::greater<int>());
+    #endif
+
     for (uint32_t b = 0; b < num_batches; ++b) {
         // resync all threads before writing next batch of shared mem
         block.sync();
@@ -346,11 +360,19 @@ __global__ void rasterize_to_pixels_from_world_3dgs_bwd_kernel(
                     buffer[k] += rgbs_batch[t * CDIM + k] * fac;
                 }
             }
+            #if USE_MANUAL_LABELED_PARTITION
+            manual_warpSum<CDIM>(v_rgb_local, warp);
+            manual_warpSum(v_mean_local, warp);
+            manual_warpSum(v_scale_local, warp);
+            manual_warpSum(v_quat_local, warp);
+            manual_warpSum(v_opacity_local, warp);
+            #else
             warpSum<CDIM>(v_rgb_local, warp);
             warpSum(v_mean_local, warp);
             warpSum(v_scale_local, warp);
             warpSum(v_quat_local, warp);
             warpSum(v_opacity_local, warp);
+            #endif
             if (warp.thread_rank() == 0) {
                 int32_t isect_id = id_batch[t]; // flatten index in [B * C * N] or [nnz]
                 int32_t isect_bid = isect_id / (C * N);   // intersection batch index
