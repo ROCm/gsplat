@@ -304,7 +304,7 @@ void launch_projection_2dgs_fused_fwd_kernel(
     }
 
     projection_2dgs_fused_fwd_kernel<float>
-        <<<grid, threads, shmem_size, at::cuda::getCurrentCUDAStream()>>>(
+        <<<grid, threads, shmem_size, GET_CURRENT_STREAM()>>>(
             B,
             C,
             N,
@@ -605,7 +605,7 @@ void launch_projection_2dgs_fused_bwd_kernel(
     }
 
     projection_2dgs_fused_bwd_kernel<float>
-        <<<grid, threads, shmem_size, at::cuda::getCurrentCUDAStream()>>>(
+        <<<grid, threads, shmem_size, GET_CURRENT_STREAM()>>>(
             B,
             C,
             N,

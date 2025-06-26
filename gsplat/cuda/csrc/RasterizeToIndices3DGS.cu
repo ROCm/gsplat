@@ -226,7 +226,7 @@ void launch_rasterize_to_indices_3dgs_kernel(
     }
 
     rasterize_to_indices_3dgs_kernel<float>
-        <<<grid, threads, shmem_size, at::cuda::getCurrentCUDAStream()>>>(
+        <<<grid, threads, shmem_size, GET_CURRENT_STREAM()>>>(
             range_start,
             range_end,
             I,

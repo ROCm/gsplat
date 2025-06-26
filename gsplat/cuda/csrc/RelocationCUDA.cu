@@ -74,7 +74,7 @@ void launch_relocation_kernel(
                 <<<grid,
                    threads,
                    shmem_size,
-                   at::cuda::getCurrentCUDAStream()>>>(
+                   GET_CURRENT_STREAM()>>>(
                     N,
                     opacities.data_ptr<scalar_t>(),
                     scales.data_ptr<scalar_t>(),

@@ -325,7 +325,7 @@ void launch_projection_ewa_3dgs_packed_fwd_kernel(
                 <<<grid,
                    threads,
                    shmem_size,
-                   at::cuda::getCurrentCUDAStream()>>>(
+                   GET_CURRENT_STREAM()>>>(
                     B,
                     C,
                     N,
@@ -907,7 +907,7 @@ void launch_projection_ewa_3dgs_packed_bwd_kernel(
                 <<<grid,
                    threads,
                    shmem_size,
-                   at::cuda::getCurrentCUDAStream()>>>(
+                   GET_CURRENT_STREAM()>>>(
                     B, 
                     C,
                     N,

@@ -252,7 +252,7 @@ void launch_projection_ut_3dgs_fused_kernel(
         <<<grid,
         threads,
         shmem_size,
-        at::cuda::getCurrentCUDAStream()>>>(
+        GET_CURRENT_STREAM()>>>(
             B,
             C,
             N,

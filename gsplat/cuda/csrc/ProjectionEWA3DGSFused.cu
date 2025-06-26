@@ -262,7 +262,7 @@ void launch_projection_ewa_3dgs_fused_fwd_kernel(
                 <<<grid,
                    threads,
                    shmem_size,
-                   at::cuda::getCurrentCUDAStream()>>>(
+                   GET_CURRENT_STREAM()>>>(
                     B,
                     C,
                     N,
@@ -707,7 +707,7 @@ void launch_projection_ewa_3dgs_fused_bwd_kernel(
                 <<<grid,
                    threads,
                    shmem_size,
-                   at::cuda::getCurrentCUDAStream()>>>(
+                   GET_CURRENT_STREAM()>>>(
                     B, 
                     C,
                     N,

@@ -1,11 +1,5 @@
 #include <ATen/Dispatch.h>
 #include <ATen/core/Tensor.h>
-#include <c10/cuda/CUDAStream.h>
-#include <cooperative_groups.h>
-
-// for CUB_WRAPPER
-#include <c10/cuda/CUDACachingAllocator.h>
-#include <cub/cub.cuh>
 
 #include "Common.h"
 #include "Intersect.h"
@@ -170,7 +164,7 @@ void launch_intersect_tile_kernel(
                 <<<grid,
                    threads,
                    shmem_size,
-                   at::cuda::getCurrentCUDAStream()>>>(
+                   GET_CURRENT_STREAM()>>>(
                     packed,
                     I,
                     N,
@@ -281,7 +275,7 @@ void launch_intersect_offset_kernel(
         grid,
         threads,
         shmem_size,
-        at::cuda::getCurrentCUDAStream()>>>(
+        GET_CURRENT_STREAM()>>>(
         n_elements,
         isect_ids.data_ptr<int64_t>(),
         I,
@@ -320,7 +314,7 @@ void radix_sort_double_buffer(
         n_isects,
         0,
         32 + tile_n_bits + image_n_bits,
-        at::cuda::getCurrentCUDAStream()
+        GET_CURRENT_STREAM()
     );
     switch (d_keys.selector) {
     case 0: // sorted items are stored in isect_ids
@@ -375,7 +369,7 @@ void segmented_radix_sort_double_buffer(
         offsets.data_ptr<int64_t>() + 1,
         0,
         32 + tile_n_bits,
-        at::cuda::getCurrentCUDAStream()
+        GET_CURRENT_STREAM()
     );
     switch (d_keys.selector) {
     case 0: // sorted items are stored in isect_ids

@@ -783,7 +783,7 @@ void launch_rasterize_to_pixels_2dgs_bwd_kernel(
     }
 
     rasterize_to_pixels_2dgs_bwd_kernel<CDIM, float>
-        <<<grid, threads, shmem_size, at::cuda::getCurrentCUDAStream()>>>(
+        <<<grid, threads, shmem_size, GET_CURRENT_STREAM()>>>(
             I,
             N,
             n_isects,

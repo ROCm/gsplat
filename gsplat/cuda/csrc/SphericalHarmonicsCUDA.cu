@@ -430,7 +430,7 @@ void launch_spherical_harmonics_fwd_kernel(
                 <<<grid,
                    threads,
                    shmem_size,
-                   at::cuda::getCurrentCUDAStream()>>>(
+                   GET_CURRENT_STREAM()>>>(
                     N,
                     K,
                     degrees_to_use,
@@ -517,7 +517,7 @@ void launch_spherical_harmonics_bwd_kernel(
                 <<<grid,
                    threads,
                    shmem_size,
-                   at::cuda::getCurrentCUDAStream()>>>(
+                   GET_CURRENT_STREAM()>>>(
                     N,
                     K,
                     degrees_to_use,

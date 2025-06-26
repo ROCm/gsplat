@@ -1,9 +1,12 @@
 #pragma once
 
 #include "Common.h"
-
+#ifndef USE_ROCM 
 #include <cooperative_groups.h>
 #include <cooperative_groups/reduce.h>
+#else
+#include <hip/hip_cooperative_groups.h>
+#endif  
 
 namespace gsplat {
 
@@ -82,7 +85,7 @@ inline __device__ void covarW2C_VJP(
 ///////////////////////////////
 // Reduce
 ///////////////////////////////
-
+#ifndef USE_ROCM
 template <uint32_t DIM, class WarpT>
 inline __device__ void warpSum(float *val, WarpT &warp) {
 #pragma unroll
@@ -134,7 +137,7 @@ template <class WarpT> inline __device__ void warpSum(mat2 &val, WarpT &warp) {
 template <class WarpT> inline __device__ void warpMax(float &val, WarpT &warp) {
     val = cg::reduce(warp, val, cg::greater<float>());
 }
-
+#else
 
 // --- Warp Reduction Helpers ---
 
@@ -478,6 +481,7 @@ inline __device__ void manual_dynamic_reduce_sum_mat3(
         }  
     }  
 }  
+#endif
 
 ///////////////////////////////
 // Quaternion

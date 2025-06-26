@@ -109,7 +109,7 @@ void launch_projection_ewa_simple_fwd_kernel(
                 <<<grid,
                    threads,
                    shmem_size,
-                   at::cuda::getCurrentCUDAStream()>>>(
+                   GET_CURRENT_STREAM()>>>(
                     B,
                     C,
                     N,
@@ -271,7 +271,7 @@ void launch_projection_ewa_simple_bwd_kernel(
                 <<<grid,
                    threads,
                    shmem_size,
-                   at::cuda::getCurrentCUDAStream()>>>(
+                   GET_CURRENT_STREAM()>>>(
                     B,
                     C,
                     N,

@@ -1,9 +1,9 @@
 #include <ATen/Dispatch.h> // AT_DISPATCH_XXX
 #include <ATen/core/Tensor.h>
-#include <c10/cuda/CUDAStream.h> // at::cuda::getCurrentCUDAStream
-#include <cooperative_groups.h>
+
 
 #include "Null.h"
+#include "Common.h"
 
 namespace gsplat {
 
@@ -73,7 +73,7 @@ void launch_adam_kernel(
 
     AT_DISPATCH_FLOATING_TYPES(param.scalar_type(), "adam_kernel", [&]() {
         adam_kernel<scalar_t>
-            <<<grid, threads, shmem_size, at::cuda::getCurrentCUDAStream()>>>(
+            <<<grid, threads, shmem_size, GET_CURRENT_STREAM()>>>(
                 N,
                 D,
                 param.data_ptr<scalar_t>(),
