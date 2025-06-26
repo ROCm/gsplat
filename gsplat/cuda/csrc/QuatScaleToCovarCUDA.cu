@@ -1,9 +1,9 @@
 #include <ATen/Dispatch.h>
 #include <ATen/core/Tensor.h>
-#include <c10/cuda/CUDAStream.h>
-#include <cooperative_groups.h>
+
 
 #include "Common.h"
+#include "Common.cuh"
 #include "QuatScaleToCovar.h"
 #include "Utils.cuh"
 

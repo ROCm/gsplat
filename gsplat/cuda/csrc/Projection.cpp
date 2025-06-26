@@ -1,6 +1,5 @@
 #include <ATen/TensorUtils.h>
 #include <ATen/core/Tensor.h>
-#include <c10/cuda/CUDAGuard.h> // for DEVICE_GUARD
 #include <tuple>
 
 #include <ATen/Functions.h>
@@ -34,7 +33,7 @@ std::tuple<at::Tensor, at::Tensor> projection_ewa_simple_fwd(
     at::DimVector means2d_shape(batch_dims);
     means2d_shape.append({C, N, 2});
     at::Tensor means2d = at::empty(means2d_shape, opt);
-    
+
     at::DimVector covars2d_shape(batch_dims);
     covars2d_shape.append({C, N, 2, 2});
     at::Tensor covars2d = at::empty(covars2d_shape, opt);

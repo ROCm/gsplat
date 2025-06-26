@@ -1,9 +1,11 @@
 #include <ATen/Dispatch.h> // AT_DISPATCH_XXX
 #include <ATen/core/Tensor.h>
-#include <c10/cuda/CUDAStream.h> // GET_CURRENT_STREAM
 
 #include "Null.h"
-// #include "Utils.cuh" // optionally include some shared utility functions
+#include "Common.h"
+#include "Common.cuh"
+
+//#include "Utils.cuh" // optionally include some shared utility functions
 
 namespace gsplat {
 

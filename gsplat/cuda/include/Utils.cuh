@@ -195,7 +195,7 @@ inline __device__ int32_t reduce_max(cg::thread_group g, int32_t* temp, int32_t 
 inline __device__ void manual_warpSum(float& val, const cg::thread_group& warp) {  
     // Get thread ID within warp  
     unsigned int lane = warp.thread_rank();  
-    unsigned int warp_mask = 0xFFFFFFFF;  
+    unsigned long warp_mask = 0xFFFFFFFF;  
       
     // Perform warp-level sum  
     for (int offset = 16; offset > 0; offset /= 2) {  
@@ -213,7 +213,7 @@ inline __device__ void manual_warpSum(vec2& v, const cg::thread_group& warp) {
     float y = v.y;  
       
     manual_warpSum(x, warp);  
-    manual_warpSum(y, warp);  
+    manual_warpSum(y, warp);
       
     v.x = x;  
     v.y = y;  
@@ -264,10 +264,10 @@ inline __device__ void manual_dynamic_reduce_sum_vec2(
     vec2&              val_in_out,  
     long long          current_label,  
     int                warp_thread_id,  
-    unsigned int       warp_active_mask  
+    unsigned long       warp_active_mask  
 ) {  
     // First, create a mask of all threads with matching labels  
-    unsigned int my_label_mask = 0;  
+    unsigned long my_label_mask = 0;  
     for (int i = 0; i < 32; ++i) {  
         if (warp_active_mask & (1U << i)) {  
             long long lane_label = __shfl_sync(warp_active_mask, current_label, i);  
@@ -314,10 +314,10 @@ inline __device__ void manual_dynamic_reduce_sum_vec3(
     vec3&              val_in_out,  
     long long          current_label,  
     int                warp_thread_id,  
-    unsigned int       warp_active_mask  
+    unsigned long       warp_active_mask  
 ) {  
     // First, create a mask of all threads with matching labels  
-    unsigned int my_label_mask = 0;  
+    unsigned long my_label_mask = 0;  
     for (int i = 0; i < 32; ++i) {  
         if (warp_active_mask & (1U << i)) {  
             long long lane_label = __shfl_sync(warp_active_mask, current_label, i);  
@@ -367,10 +367,10 @@ inline __device__ void manual_dynamic_reduce_sum_vec4(
     vec4&              val_in_out,  
     long long          current_label,  
     int                warp_thread_id,  
-    unsigned int       warp_active_mask  
+    unsigned long      warp_active_mask  
 ) {  
     // First, create a mask of all threads with matching labels  
-    unsigned int my_label_mask = 0;  
+    unsigned long my_label_mask = 0;  
     for (int i = 0; i < 32; ++i) {  
         if (warp_active_mask & (1U << i)) {  
             long long lane_label = __shfl_sync(warp_active_mask, current_label, i);  
@@ -424,10 +424,10 @@ inline __device__ void manual_dynamic_reduce_sum_mat3(
     mat3&              val_in_out,  
     long long          current_label,  
     int                warp_thread_id,  
-    unsigned int       warp_active_mask  
+    unsigned long       warp_active_mask  
 ) {  
     // First, create a mask of all threads with matching labels  
-    unsigned int my_label_mask = 0;  
+    unsigned long my_label_mask = 0;  
     for (int i = 0; i < 32; ++i) {  
         if (warp_active_mask & (1U << i)) {  
             long long lane_label = __shfl_sync(warp_active_mask, current_label, i);  

@@ -4,6 +4,7 @@
 
 #include "Null.h"
 #include "Common.h"
+#include "Common.cuh"
 
 namespace gsplat {
 

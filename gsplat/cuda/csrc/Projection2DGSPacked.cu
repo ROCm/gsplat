@@ -1,16 +1,12 @@
 #include <ATen/Dispatch.h>
 #include <ATen/core/Tensor.h>
-#include <ATen/cuda/Atomic.cuh>
-#include <c10/cuda/CUDAStream.h>
-#include <cooperative_groups.h>
-#include <cub/cub.cuh>
 
 #include "Common.h"
+#include "Common.cuh"
 #include "Projection.h"
 #include "Projection2DGS.cuh" // Utils for 2DGS Projection
 #include "Utils.cuh"
 
-#define USE_MANUAL_LABELED_PARTITION 1
 #define DEBUG_PRINT 0
 #ifdef DEBUG_PRINT
 #include <cstdio> // Only include cstdio if DEBUG_PRINT is enabled
@@ -402,7 +398,7 @@ __global__ void projection_2dgs_packed_bwd_kernel(
     
     // Get warp context for dynamic reductions
     unsigned int warp_thread_id = threadIdx.x % 32;
-    unsigned int warp_active_mask = __activemask();
+    unsigned long warp_active_mask = __activemask();
 
     if (sparse_grad) {
         // write out results with sparse layout
@@ -426,7 +422,7 @@ __global__ void projection_2dgs_packed_bwd_kernel(
         // #if __CUDA_ARCH__ >= 700
         // write out results with warp-level reduction
 
-        #if USE_MANUAL_LABELED_PARTITION
+        #if USE_ROCM
         if (v_means != nullptr) {
             manual_dynamic_reduce_sum_vec3(v_mean, gid, warp_thread_id, warp_active_mask);
 
@@ -500,7 +496,7 @@ __global__ void projection_2dgs_packed_bwd_kernel(
     }
 
     if (v_viewmats != nullptr) {
-        #if USE_MANUAL_LABELED_PARTITION
+        #if USE_ROCM
         manual_dynamic_reduce_sum_mat3(v_R, cid, warp_thread_id, warp_active_mask);
         manual_dynamic_reduce_sum_vec3(v_t, cid, warp_thread_id, warp_active_mask);
 

@@ -1,15 +1,11 @@
 #include <ATen/Dispatch.h>
 #include <ATen/core/Tensor.h>
-#include <ATen/cuda/Atomic.cuh>
-#include <c10/cuda/CUDAStream.h>
-#include <cooperative_groups.h>
-#include <cub/cub.cuh>
 
 #include "Common.h"
+#include "Common.cuh"
 #include "Projection.h"
 #include "Utils.cuh"
 
-#define USE_MANUAL_LABELED_PARTITION 1
 #define DEBUG_PRINT 0
 #ifdef DEBUG_PRINT
 #include <cstdio> // Only include cstdio if DEBUG_PRINT is enabled
@@ -203,7 +199,7 @@ __global__ void projection_ewa_3dgs_packed_fwd_kernel(
         // https://arxiv.org/pdf/2402.00525
         radius_x = ceilf(extend * sqrtf(covar2d[0][0]));
         radius_y = ceilf(extend * sqrtf(covar2d[1][1]));
-        
+
         if (radius_x <= radius_clip && radius_y <= radius_clip) {
             valid = false;
         }
@@ -607,13 +603,13 @@ if (idx % 100000 == 0 && DEBUG_PRINT) {
     }
     // Get warp context for dynamic reductions
     unsigned int warp_thread_id = threadIdx.x % 32;
-    unsigned int warp_active_mask = __activemask();
+    unsigned long warp_active_mask = __activemask();
     auto warp = cg::tiled_partition<32>(cg::this_thread_block());
 
     // --- DENSE GRADIENT ACCUMULATION (Gaussian-specific parameters) ---
     // This path uses warp-level reductions and atomic adds to global memory.
     if (!sparse_grad) {
-        #if USE_MANUAL_LABELED_PARTITION
+        #if USE_ROCM
         // Manual emulation of labeled_partition + reduce for Gaussian-related gradients
         // This calculates the sum within the warp for a given GID.
         if (v_means != nullptr) {
@@ -706,7 +702,7 @@ if (idx % 100000 == 0 && DEBUG_PRINT) {
                 gpuAtomicAdd(target_v_scales_ptr + 2, static_cast<scalar_t>(v_scale_local.z));
             }
         }
-        #else // USE_MANUAL_LABELED_PARTITION is 0, use Cooperative Groups Labeled Partition
+        #else // USE_ROCM is 0, use Cooperative Groups Labeled Partition
         // Preferred path for modern CUDA: using cg::labeled_partition
         auto warp_group_g = cg::labeled_partition(warp, gid);
         // No explicit is_valid() check needed here as `labeled_partition` guarantees valid sub-groups for active threads.
@@ -801,7 +797,7 @@ if (idx % 100000 == 0 && DEBUG_PRINT) {
     // --- GRADIENT ACCUMULATION for v_viewmats (Camera-specific) ---
     // v_viewmats is always dense, so atomic adds are needed regardless of sparse_grad.
     if (v_viewmats != nullptr) {
-        #if USE_MANUAL_LABELED_PARTITION
+        #if USE_ROCM
         // Manual emulation for Camera-related gradients
         manual_dynamic_reduce_sum_mat3(v_R_local, cid, warp_thread_id, warp_active_mask);
         manual_dynamic_reduce_sum_vec3(v_t_local, cid, warp_thread_id, warp_active_mask);
@@ -831,7 +827,7 @@ if (idx % 100000 == 0 && DEBUG_PRINT) {
                 if (i == 2) gpuAtomicAdd(target_v_viewmats_ptr + i * 4 + 3, static_cast<scalar_t>(v_t_local.z));
             }
         }
-        #else // USE_MANUAL_LABELED_PARTITION is 0, use Cooperative Groups Labeled Partition
+        #else // USE_ROCM is 0, use Cooperative Groups Labeled Partition
         auto warp_group_c = cg::labeled_partition(warp, cid);
 
         warpSum(v_R_local, warp_group_c);

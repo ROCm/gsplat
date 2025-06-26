@@ -2,6 +2,7 @@
 #include <ATen/core/Tensor.h>
 
 #include "Common.h"
+#include "Common.cuh"
 #include "Intersect.h"
 #include "Utils.cuh"
 

@@ -1,8 +1,8 @@
 #include <ATen/Dispatch.h>
 #include <ATen/core/Tensor.h>
-#include <c10/cuda/CUDAStream.h>
 
 #include "Common.h"
+#include "Common.cuh"
 #include "Relocation.h"
 
 namespace gsplat {
