@@ -1,9 +1,8 @@
 #include <ATen/Dispatch.h>
 #include <ATen/core/Tensor.h>
-#include <c10/cuda/CUDAStream.h>
-#include <cooperative_groups.h>
 
 #include "Common.h"
+#include "Common.cuh"
 #include "Rasterization.h"
 
 namespace gsplat {
@@ -27,8 +26,7 @@ __global__ void rasterize_to_indices_2dgs_kernel(
     const uint32_t tile_height,
     const int32_t *__restrict__ tile_offsets, // [..., tile_height, tile_width]
     const int32_t *__restrict__ flatten_ids,  // [n_isects]
-    const scalar_t 
-        *__restrict__ transmittances,         // [..., image_height, image_width]
+    const scalar_t *__restrict__ transmittances, // [..., image_height, image_width]
     const int32_t *__restrict__ chunk_starts, // [..., image_height, image_width]
     int32_t *__restrict__ chunk_cnts,         // [..., image_height, image_width]
     int64_t *__restrict__ gaussian_ids,       // [n_elems]
@@ -249,9 +247,7 @@ void launch_rasterize_to_indices_2dgs_kernel(
                          (sizeof(int32_t) + sizeof(vec3) + sizeof(vec3) +
                           sizeof(vec3) + sizeof(vec3));
 
-    // TODO: an optimization can be done by passing the actual number of
-    // channels into the kernel functions and avoid necessary global memory
-    // writes. This requires moving the channel padding from python to C side.
+#ifndef USE_ROCM
     if (cudaFuncSetAttribute(
             rasterize_to_indices_2dgs_kernel<float>,
             cudaFuncAttributeMaxDynamicSharedMemorySize,
@@ -263,9 +259,21 @@ void launch_rasterize_to_indices_2dgs_kernel(
             " bytes), try lowering tile_size."
         );
     }
+#else
+    hipError_t err = hipFuncSetAttribute(
+        reinterpret_cast<void*>(rasterize_to_indices_2dgs_kernel<float>), // Cast to void*
+        hipFuncAttributeMaxDynamicSharedMemorySize,
+        static_cast<int>(shmem_size) // HIP requires int for shared memory size
+    );
 
+    if (err != hipSuccess) {
+        std::stringstream ss;
+        ss << "Failed to set maximum shared memory size (requested " << shmem_size << " bytes), try lowering tile_size.  HIP Error: " << hipGetErrorString(err);
+        throw std::runtime_error(ss.str());
+    }
+#endif
     rasterize_to_indices_2dgs_kernel<float>
-        <<<grid, threads, shmem_size, at::cuda::getCurrentCUDAStream()>>>(
+        <<<grid, threads, shmem_size, GET_CURRENT_STREAM()>>>(
             range_start,
             range_end,
             I,

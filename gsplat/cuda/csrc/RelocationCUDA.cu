@@ -1,8 +1,8 @@
 #include <ATen/Dispatch.h>
 #include <ATen/core/Tensor.h>
-#include <c10/cuda/CUDAStream.h>
 
 #include "Common.h"
+#include "Common.cuh"
 #include "Relocation.h"
 
 namespace gsplat {
@@ -74,7 +74,7 @@ void launch_relocation_kernel(
                 <<<grid,
                    threads,
                    shmem_size,
-                   at::cuda::getCurrentCUDAStream()>>>(
+                   GET_CURRENT_STREAM()>>>(
                     N,
                     opacities.data_ptr<scalar_t>(),
                     scales.data_ptr<scalar_t>(),
