@@ -110,8 +110,11 @@ def get_extensions():
         )
         sources += [osp.join(extensions_dir, "ext.cpp")]
 
-        undef_macros = []
-        define_macros = []
+        # GLM/Torch has spammy and very annoyingly verbose warnings that this suppresses
+        nvcc_flags += ["-diag-suppress", "20012,186"]
+        extra_compile_args["nvcc"] = nvcc_flags
+        if sys.platform == "win32":
+            extra_compile_args["nvcc"] += ["-DWIN32_LEAN_AND_MEAN", "-allow-unsupported-compiler"]
 
         extra_compile_args = {"cxx": ["-O3"]}
         if not os.name == "nt":  # Not on Windows:
