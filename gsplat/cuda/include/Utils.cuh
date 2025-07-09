@@ -148,9 +148,9 @@ template <class WarpT> inline __device__ void warpMax(float &val, WarpT &warp) {
 //     return __ffs(mask) - 1; // __ffs(mask) returns (index + 1) of the first set bit
 // }
 
-inline __device__ int get_leader_lane_id(unsigned int mask) {  
+inline __device__ int get_leader_lane_id(unsigned long long mask) {  
     // Return first active lane in the mask, or -1 if mask is empty  
-    return mask ? __ffs(mask) - 1 : -1;  // __ffs returns 1-based position of first set bit  
+    return mask ? __ffsll(mask) - 1 : -1;  // __ffsll returns 1-based position of first set bit  
 }  
 
 
@@ -264,21 +264,21 @@ inline __device__ void manual_dynamic_reduce_sum_vec2(
     vec2&              val_in_out,  
     long long          current_label,  
     int                warp_thread_id,  
-    unsigned long       warp_active_mask  
+    unsigned long long      warp_active_mask  
 ) {  
     // First, create a mask of all threads with matching labels  
-    unsigned long my_label_mask = 0;  
-    for (int i = 0; i < 32; ++i) {  
-        if (warp_active_mask & (1U << i)) {  
+    unsigned long long my_label_mask = 0;  
+    for (int i = 0; i < 64; ++i) {  
+        if (warp_active_mask & (1ULL << i)) {  
             long long lane_label = __shfl_sync(warp_active_mask, current_label, i);  
             if (lane_label == current_label) {  
-                my_label_mask |= (1U << i);  
+                my_label_mask |= (1ULL << i);  
             }  
         }  
     }  
       
     // If this thread doesn't have this label or no threads have this label, return early  
-    if (my_label_mask == 0 || !(my_label_mask & (1U << warp_thread_id))) {  
+    if (my_label_mask == 0 || !(my_label_mask & (1ULL << warp_thread_id))) {  
         return;  
     }  
       
@@ -290,9 +290,9 @@ inline __device__ void manual_dynamic_reduce_sum_vec2(
     float sum_y = val_in_out.y;  
       
     // Use a mask-based reduction approach with progressive halving  
-    for (int mask = my_label_mask & ~(1U << warp_thread_id); mask != 0; ) {  
-        int src_lane = __ffs(mask) - 1;  
-        mask &= ~(1U << src_lane);  
+    for (unsigned long long mask = my_label_mask & ~(1ULL << warp_thread_id); mask != 0; ) {  
+        int src_lane = __ffsll(mask) - 1;  
+        mask &= ~(1ULL << src_lane);  
           
         sum_x += __shfl_sync(my_label_mask, val_in_out.x, src_lane);  
         sum_y += __shfl_sync(my_label_mask, val_in_out.y, src_lane);  
@@ -314,21 +314,21 @@ inline __device__ void manual_dynamic_reduce_sum_vec3(
     vec3&              val_in_out,  
     long long          current_label,  
     int                warp_thread_id,  
-    unsigned long       warp_active_mask  
+    unsigned long long      warp_active_mask  
 ) {  
     // First, create a mask of all threads with matching labels  
-    unsigned long my_label_mask = 0;  
-    for (int i = 0; i < 32; ++i) {  
-        if (warp_active_mask & (1U << i)) {  
+    unsigned long long my_label_mask = 0;  
+    for (int i = 0; i < 64; ++i) {  
+        if (warp_active_mask & (1ULL << i)) {  
             long long lane_label = __shfl_sync(warp_active_mask, current_label, i);  
             if (lane_label == current_label) {  
-                my_label_mask |= (1U << i);  
+                my_label_mask |= (1ULL << i);  
             }  
         }  
     }  
       
     // If this thread doesn't have this label or no threads have this label, return early  
-    if (my_label_mask == 0 || !(my_label_mask & (1U << warp_thread_id))) {  
+    if (my_label_mask == 0 || !(my_label_mask & (1ULL << warp_thread_id))) {  
         return;  
     }  
       
@@ -341,9 +341,9 @@ inline __device__ void manual_dynamic_reduce_sum_vec3(
     float sum_z = val_in_out.z;  
       
     // Use a mask-based reduction approach with progressive halving  
-    for (int mask = my_label_mask & ~(1U << warp_thread_id); mask != 0; ) {  
-        int src_lane = __ffs(mask) - 1;  
-        mask &= ~(1U << src_lane);  
+    for (unsigned long long mask = my_label_mask & ~(1ULL << warp_thread_id); mask != 0; ) {  
+        int src_lane = __ffsll(mask) - 1;  
+        mask &= ~(1ULL << src_lane);  
           
         sum_x += __shfl_sync(my_label_mask, val_in_out.x, src_lane);  
         sum_y += __shfl_sync(my_label_mask, val_in_out.y, src_lane);  
@@ -367,21 +367,21 @@ inline __device__ void manual_dynamic_reduce_sum_vec4(
     vec4&              val_in_out,  
     long long          current_label,  
     int                warp_thread_id,  
-    unsigned long      warp_active_mask  
+    unsigned long long      warp_active_mask  
 ) {  
     // First, create a mask of all threads with matching labels  
-    unsigned long my_label_mask = 0;  
-    for (int i = 0; i < 32; ++i) {  
-        if (warp_active_mask & (1U << i)) {  
+    unsigned long long my_label_mask = 0;  
+    for (int i = 0; i < 64; ++i) {  
+        if (warp_active_mask & (1ULL << i)) {  
             long long lane_label = __shfl_sync(warp_active_mask, current_label, i);  
             if (lane_label == current_label) {  
-                my_label_mask |= (1U << i);  
+                my_label_mask |= (1ULL << i);  
             }  
         }  
     }  
       
     // If this thread doesn't have this label or no threads have this label, return early  
-    if (my_label_mask == 0 || !(my_label_mask & (1U << warp_thread_id))) {  
+    if (my_label_mask == 0 || !(my_label_mask & (1ULL << warp_thread_id))) {  
         return;  
     }  
       
@@ -395,9 +395,9 @@ inline __device__ void manual_dynamic_reduce_sum_vec4(
     float sum_w = val_in_out.w;  
       
     // Use a mask-based reduction approach with progressive halving  
-    for (int mask = my_label_mask & ~(1U << warp_thread_id); mask != 0; ) {  
-        int src_lane = __ffs(mask) - 1;  
-        mask &= ~(1U << src_lane);  
+    for (unsigned long long mask = my_label_mask & ~(1ULL << warp_thread_id); mask != 0; ) {  
+        int src_lane = __ffsll(mask) - 1;  
+        mask &= ~(1ULL << src_lane);  
           
         sum_x += __shfl_sync(my_label_mask, val_in_out.x, src_lane);  
         sum_y += __shfl_sync(my_label_mask, val_in_out.y, src_lane);  
@@ -424,21 +424,21 @@ inline __device__ void manual_dynamic_reduce_sum_mat3(
     mat3&              val_in_out,  
     long long          current_label,  
     int                warp_thread_id,  
-    unsigned long       warp_active_mask  
+    unsigned long long      warp_active_mask  
 ) {  
     // First, create a mask of all threads with matching labels  
-    unsigned long my_label_mask = 0;  
-    for (int i = 0; i < 32; ++i) {  
-        if (warp_active_mask & (1U << i)) {  
+    unsigned long long my_label_mask = 0;  
+    for (int i = 0; i < 64; ++i) {  
+        if (warp_active_mask & (1ULL << i)) {  
             long long lane_label = __shfl_sync(warp_active_mask, current_label, i);  
             if (lane_label == current_label) {  
-                my_label_mask |= (1U << i);  
+                my_label_mask |= (1ULL << i);  
             }  
         }  
     }  
       
     // If this thread doesn't have this label or no threads have this label, return early  
-    if (my_label_mask == 0 || !(my_label_mask & (1U << warp_thread_id))) {  
+    if (my_label_mask == 0 || !(my_label_mask & (1ULL << warp_thread_id))) {  
         return;  
     }  
       
@@ -454,9 +454,9 @@ inline __device__ void manual_dynamic_reduce_sum_mat3(
     }  
       
     // Use a mask-based reduction approach   
-    for (int mask = my_label_mask & ~(1U << warp_thread_id); mask != 0; ) {  
-        int src_lane = __ffs(mask) - 1;  
-        mask &= ~(1U << src_lane);  
+    for (unsigned long long mask = my_label_mask & ~(1ULL << warp_thread_id); mask != 0; ) {  
+        int src_lane = __ffsll(mask) - 1;  
+        mask &= ~(1ULL << src_lane);  
           
         for (int col = 0; col < 3; ++col) {  
             for (int row = 0; row < 3; ++row) {  

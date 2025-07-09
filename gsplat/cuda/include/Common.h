@@ -14,6 +14,8 @@
 #include <c10/hip/HIPCachingAllocator.h>
 #include <c10/hip/HIPStream.h>
 #include <c10/hip/HIPGuard.h>
+#include <c10/core/DeviceGuard.h>
+#include <ATen/DeviceGuard.h>
 #endif
 
 namespace gsplat {
@@ -37,7 +39,8 @@ namespace gsplat {
 #else
 #define cub hipcub
 #define GET_CURRENT_STREAM() at::hip::getCurrentHIPStream()
-#define DEVICE_GUARD(_ten)                                                     \
+#define DEVICE_GUARD(_ten)
+    //const c10::OptionalDeviceGuard device_guard(at::device_of(_ten));                                                   \
     const at::hip::OptionalHIPGuard device_guard(device_of(_ten));
 #define cudaFuncSetAttribute hipFuncSetAttribute
 #define cudaFuncAttributeMaxDynamicSharedMemorySize hipFuncAttributeMaxDynamicSharedMemorySize

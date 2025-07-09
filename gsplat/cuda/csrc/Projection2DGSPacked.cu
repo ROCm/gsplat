@@ -397,8 +397,8 @@ __global__ void projection_2dgs_packed_bwd_kernel(
     auto warp = cg::tiled_partition<32>(cg::this_thread_block());
     
     // Get warp context for dynamic reductions
-    unsigned int warp_thread_id = threadIdx.x % 32;
-    unsigned long warp_active_mask = __activemask();
+    unsigned int warp_thread_id = threadIdx.x % 64;
+    unsigned long long warp_active_mask = __activemask();
 
     if (sparse_grad) {
         // write out results with sparse layout
@@ -427,11 +427,11 @@ __global__ void projection_2dgs_packed_bwd_kernel(
             manual_dynamic_reduce_sum_vec3(v_mean, gid, warp_thread_id, warp_active_mask);
 
             // Elect a leader for atomic write to global memory.
-            unsigned int my_gid_mask = 0;
-            for (int i = 0; i < 32; ++i) {
+            unsigned long long my_gid_mask = 0;
+            for (int i = 0; i < 64; ++i) {
                 long long lane_gid_temp = __shfl_sync(warp_active_mask, gid, i);
-                if ((warp_active_mask & (1U << i)) && (lane_gid_temp == gid)) {
-                    my_gid_mask |= (1U << i);
+                if ((warp_active_mask & (1ULL << i)) && (lane_gid_temp == gid)) {
+                    my_gid_mask |= (1ULL << i);
                 }
             }
             int my_warp_leader_lane_id = get_leader_lane_id(my_gid_mask);
@@ -447,11 +447,11 @@ __global__ void projection_2dgs_packed_bwd_kernel(
         manual_dynamic_reduce_sum_vec4(v_quat, gid, warp_thread_id, warp_active_mask);
         manual_dynamic_reduce_sum_vec2(v_scale, gid, warp_thread_id, warp_active_mask);
 
-        unsigned int my_gid_mask = 0;
-        for (int i = 0; i < 32; ++i) {
+        unsigned long long my_gid_mask = 0;
+        for (int i = 0; i < 64; ++i) {
             long long lane_gid_temp = __shfl_sync(warp_active_mask, gid, i);
-            if ((warp_active_mask & (1U << i)) && (lane_gid_temp == gid)) {
-                my_gid_mask |= (1U << i);
+            if ((warp_active_mask & (1ULL << i)) && (lane_gid_temp == gid)) {
+                my_gid_mask |= (1ULL << i);
             }
         }
         int my_warp_leader_lane_id = get_leader_lane_id(my_gid_mask);
@@ -500,11 +500,11 @@ __global__ void projection_2dgs_packed_bwd_kernel(
         manual_dynamic_reduce_sum_mat3(v_R, cid, warp_thread_id, warp_active_mask);
         manual_dynamic_reduce_sum_vec3(v_t, cid, warp_thread_id, warp_active_mask);
 
-        unsigned int my_cid_mask = 0;
-        for (int i = 0; i < 32; ++i) {
+        unsigned long long my_cid_mask = 0;
+        for (int i = 0; i < 64; ++i) {
             long long lane_cid_temp = __shfl_sync(warp_active_mask, cid, i);
-            if ((warp_active_mask & (1U << i)) && (lane_cid_temp == cid)) {
-                my_cid_mask |= (1U << i);
+            if ((warp_active_mask & (1ULL << i)) && (lane_cid_temp == cid)) {
+                my_cid_mask |= (1ULL << i);
             }
         }
         int my_warp_leader_lane_id_cid = get_leader_lane_id(my_cid_mask);
