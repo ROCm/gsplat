@@ -195,10 +195,11 @@ inline __device__ int32_t reduce_max(cg::thread_group g, int32_t* temp, int32_t 
 inline __device__ void manual_warpSum(float& val, const cg::thread_group& warp) {  
     // Get thread ID within warp  
     unsigned int lane = warp.thread_rank();  
-    unsigned long warp_mask = 0xFFFFFFFF;  
+    //unsigned long warp_mask = 0xFFFFFFFF; 
+    unsigned long long warp_mask = 0xFFFFFFFFFFFFFFFFULL; 
       
     // Perform warp-level sum  
-    for (int offset = 16; offset > 0; offset /= 2) {  
+    for (int offset = 32; offset > 0; offset /= 2) {  
         float other = __shfl_down_sync(warp_mask, val, offset);  
         val += other;  
     }  

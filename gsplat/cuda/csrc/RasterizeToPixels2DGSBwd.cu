@@ -244,7 +244,7 @@ __global__ void rasterize_to_pixels_2dgs_bwd_kernel(
     // the warp
     #if USE_ROCM
     // Define shared memory array in your kernel  
-    __shared__ int32_t temp[32]; // Size of a warp, adjust if needed  
+    __shared__ int32_t temp[64]; // Size of a warp, adjust if needed  
     const int32_t warp_bin_final = reduce_max(warp, temp, bin_final);  
     #else
     const int32_t warp_bin_final =
