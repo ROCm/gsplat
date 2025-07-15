@@ -537,7 +537,9 @@ def test_rasterize_to_pixels(test_data, channels: int, batch_dims: Tuple[int, ..
     opacities = torch.broadcast_to(opacities[..., None, :], batch_dims + (C, N))
 
     # Identify intersecting tiles
-    tile_size = 16 if channels <= 32 else 4
+    # tile_size = 16 if channels <= 32 else 4
+    # Changing to 8 tile size as 4 is leading to hang issues on AMD GPUs
+    tile_size = 16 if channels <= 32 else 8
     tile_width = math.ceil(width / float(tile_size))
     tile_height = math.ceil(height / float(tile_size))
     tiles_per_gauss, isect_ids, flatten_ids = isect_tiles(

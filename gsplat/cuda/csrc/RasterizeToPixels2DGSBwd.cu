@@ -237,15 +237,19 @@ __global__ void rasterize_to_pixels_2dgs_bwd_kernel(
     // collect and process batches of gaussians
     // each thread loads one gaussian at a time before rasterizing
     const uint32_t tr = block.thread_rank();
-    cg::thread_block_tile<32> warp = cg::tiled_partition<32>(block);
+    #if USE_ROCM
+        cg::thread_block_tile<64> warp = cg::tiled_partition<64>(block);
+    #else
+        cg::thread_block_tile<32> warp = cg::tiled_partition<32>(block);
+    #endif
 
     // find the maximum final gaussian ids in the thread warp.
     // this gives the last gaussian id that have intersected with any pixels in
     // the warp
     #if USE_ROCM
-    // Define shared memory array in your kernel  
-    __shared__ int32_t temp[32]; // Size of a warp, adjust if needed  
-    const int32_t warp_bin_final = reduce_max(warp, temp, bin_final);  
+    const uint32_t meta_group_rank = warp.meta_group_rank();
+    int32_t *reduction_temp_space = (int32_t*)(&rgbs_batch[block_size * CDIM]);
+    const int32_t warp_bin_final = reduce_max(warp, reduction_temp_space, bin_final, meta_group_rank);  
     #else
     const int32_t warp_bin_final =
         cg::reduce(warp, bin_final, cg::greater<int>());
@@ -754,10 +758,24 @@ void launch_rasterize_to_pixels_2dgs_bwd_kernel(
     dim3 threads = {tile_size, tile_size, 1};
     dim3 grid = {I, tile_height, tile_width};
 
-    int64_t shmem_size =
-        tile_size * tile_size *
+    // int64_t shmem_size =
+    //     tile_size * tile_size *
+    //     (sizeof(int32_t) + sizeof(vec3) + sizeof(vec3) + sizeof(vec3) +
+    //      sizeof(vec3) + sizeof(float) * CDIM + sizeof(float) * 3);
+    
+    // --- MODIFIED SHARED MEMORY CALCULATION ---
+    const int64_t block_num_threads = threads.x * threads.y;
+
+    // Space for the data batches
+    int64_t data_shmem_size = block_num_threads *
         (sizeof(int32_t) + sizeof(vec3) + sizeof(vec3) + sizeof(vec3) +
          sizeof(vec3) + sizeof(float) * CDIM + sizeof(float) * 3);
+
+    // Space for our fixed reduction (one int32 per thread in the block)
+    int64_t reduction_shmem_size = block_num_threads * sizeof(int32_t);
+
+    // Total shared memory needed
+    int64_t shmem_size = data_shmem_size + reduction_shmem_size;
 
     if (n_isects == 0) {
         // skip the kernel launch if there are no elements
