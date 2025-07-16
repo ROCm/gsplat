@@ -126,6 +126,7 @@ __global__ void rasterize_to_pixels_3dgs_bwd_kernel(
     // collect and process batches of gaussians
     // each thread loads one gaussian at a time before rasterizing
     const uint32_t tr = block.thread_rank();
+    
     #if USE_ROCM
     cg::thread_block_tile<64> warp = cg::tiled_partition<64>(block);
     #else
@@ -133,9 +134,7 @@ __global__ void rasterize_to_pixels_3dgs_bwd_kernel(
     #endif
     
     #if USE_ROCM
-    const uint32_t meta_group_rank = warp.meta_group_rank();
-    int32_t *reduction_temp_space = (int32_t*)(&rgbs_batch[block_size * CDIM]);
-    const int32_t warp_bin_final = reduce_max(warp, reduction_temp_space, bin_final, meta_group_rank);  
+    const int32_t warp_bin_final = reduce_max_shuffle(bin_final);  
     #else
     const int32_t warp_bin_final =
         cg::reduce(warp, bin_final, cg::greater<int>());
@@ -257,13 +256,38 @@ __global__ void rasterize_to_pixels_3dgs_bwd_kernel(
                 }
             }
             #if USE_ROCM
-            manual_warpSum<CDIM>(v_rgb_local, warp);
-            manual_warpSum(v_conic_local, warp);
-            manual_warpSum(v_xy_local, warp);
+            manual_warpSum<CDIM>(v_rgb_local);
+            manual_warpSum(v_conic_local);
+            manual_warpSum(v_xy_local);
             if (v_means2d_abs != nullptr) {
-                manual_warpSum(v_xy_abs_local, warp);
+                manual_warpSum(v_xy_abs_local);
             }
-            manual_warpSum(v_opacity_local, warp);
+            manual_warpSum(v_opacity_local);
+            if (warp.thread_rank() == 0) {
+                int32_t g = id_batch[t]; // flatten index in [I * N] or [nnz]
+                float *v_rgb_ptr = (float *)(v_colors) + CDIM * g;
+#pragma unroll
+                for (uint32_t k = 0; k < CDIM; ++k) {
+                    atomicAddNoRet(v_rgb_ptr + k, v_rgb_local[k]);
+                }
+
+                float *v_conic_ptr = (float *)(v_conics) + 3 * g;
+                atomicAddNoRet(v_conic_ptr, v_conic_local.x);
+                atomicAddNoRet(v_conic_ptr + 1, v_conic_local.y);
+                atomicAddNoRet(v_conic_ptr + 2, v_conic_local.z);
+
+                float *v_xy_ptr = (float *)(v_means2d) + 2 * g;
+                atomicAddNoRet(v_xy_ptr, v_xy_local.x);
+                atomicAddNoRet(v_xy_ptr + 1, v_xy_local.y);
+
+                if (v_means2d_abs != nullptr) {
+                    float *v_xy_abs_ptr = (float *)(v_means2d_abs) + 2 * g;
+                    atomicAddNoRet(v_xy_abs_ptr, v_xy_abs_local.x);
+                    atomicAddNoRet(v_xy_abs_ptr + 1, v_xy_abs_local.y);
+                }
+
+                atomicAddNoRet(v_opacities + g, v_opacity_local);
+            }
             #else
             warpSum<CDIM>(v_rgb_local, warp);
             warpSum(v_conic_local, warp);
@@ -272,7 +296,6 @@ __global__ void rasterize_to_pixels_3dgs_bwd_kernel(
                 warpSum(v_xy_abs_local, warp);
             }
             warpSum(v_opacity_local, warp);
-            #endif
             if (warp.thread_rank() == 0) {
                 int32_t g = id_batch[t]; // flatten index in [I * N] or [nnz]
                 float *v_rgb_ptr = (float *)(v_colors) + CDIM * g;
@@ -298,6 +321,7 @@ __global__ void rasterize_to_pixels_3dgs_bwd_kernel(
 
                 gpuAtomicAdd(v_opacities + g, v_opacity_local);
             }
+            #endif
         }
     }
 }
@@ -344,22 +368,9 @@ void launch_rasterize_to_pixels_3dgs_bwd_kernel(
     dim3 threads = {tile_size, tile_size, 1};
     dim3 grid = {I, tile_height, tile_width};
 
-    // --- MODIFIED SHARED MEMORY CALCULATION ---
-    const int64_t block_num_threads = threads.x * threads.y;
-
-    // Space for the data batches
-    int64_t data_shmem_size = block_num_threads *
+    int64_t shmem_size =
+        tile_size * tile_size *
         (sizeof(int32_t) + sizeof(vec3) + sizeof(vec3) + sizeof(float) * CDIM);
-
-    // Space for our fixed reduction (one int32 per thread in the block)
-    int64_t reduction_shmem_size = block_num_threads * sizeof(int32_t);
-
-    // Total shared memory needed
-    int64_t shmem_size = data_shmem_size + reduction_shmem_size;
-
-    // int64_t shmem_size =
-    //     tile_size * tile_size *
-    //     (sizeof(int32_t) + sizeof(vec3) + sizeof(vec3) + sizeof(float) * CDIM);
 
     if (n_isects == 0) {
         // skip the kernel launch if there are no elements

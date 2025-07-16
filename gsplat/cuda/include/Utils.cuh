@@ -153,55 +153,64 @@ inline __device__ int get_leader_lane_id(unsigned long long mask) {
 // These are provided for comparison if cooperative_groups::labeled_partition and cg::reduce is not available
 // or for specific performance tuning, though `labeled_partition` is generally efficient.
 
-inline __device__ int32_t reduce_max(cg::thread_group g, int32_t* temp_base, int32_t val, uint32_t meta_group_rank)  
-{   
-    // Rank of this thread in the group
-    const unsigned int group_thread_id = g.thread_rank();
-    const uint32_t tile_size = g.size();
+// inline __device__ int32_t reduce_max(cg::thread_group g, int32_t* temp_base, int32_t val, uint32_t meta_group_rank)  
+// {   
+//     // Rank of this thread in the group
+//     const unsigned int group_thread_id = g.thread_rank();
+//     const uint32_t tile_size = g.size();
 
-    // Each tile gets its own private slice of the shared memory array. 
-    // temp_base points to the start of the entire reduction space and meta_group_rank is the unique ID of this tile within the block
-    int32_t* temp = temp_base + meta_group_rank * tile_size;
+//     // Each tile gets its own private slice of the shared memory array. 
+//     // temp_base points to the start of the entire reduction space and meta_group_rank is the unique ID of this tile within the block
+//     int32_t* temp = temp_base + meta_group_rank * tile_size;
     
-    // We start with half the group size as active threads  
-    // Every iteration the number of active threads halves, until we processed all values
-    for(unsigned int i = tile_size / 2; i > 0; i /= 2)  
-    {  
-        // Store value for this thread in a shared, temporary array
-        temp[group_thread_id] = val;
+//     // We start with half the group size as active threads  
+//     // Every iteration the number of active threads halves, until we processed all values
+//     for(unsigned int i = tile_size / 2; i > 0; i /= 2)  
+//     {  
+//         // Store value for this thread in a shared, temporary array
+//         temp[group_thread_id] = val;
         
-        // Synchronize all threads in the group 
-        g.sync();
+//         // Synchronize all threads in the group 
+//         g.sync();
 
-        // If our thread is still active, find max with its counterpart in the other half
-        if(group_thread_id < i)  
-        {  
-            val = max(val, temp[group_thread_id + i]);
-        }
+//         // If our thread is still active, find max with its counterpart in the other half
+//         if(group_thread_id < i)  
+//         {  
+//             val = max(val, temp[group_thread_id + i]);
+//         }
 
-        // Synchronize all threads in the group
-        g.sync();  
+//         // Synchronize all threads in the group
+//         g.sync();  
+//     }
+    
+//     // Store final result in shared memory and broadcast it
+//     if (group_thread_id == 0) {  
+//         temp[0] = val;
+//     }
+
+//     g.sync();
+
+//     // All threads read the result from shared memory
+//     return temp[0];
+// }
+
+inline __device__ int32_t reduce_max_shuffle(int32_t val) {
+    const unsigned long long mask = 0xFFFFFFFFFFFFFFFFULL;
+
+    #pragma unroll
+    for (int offset = 32; offset > 0; offset /= 2) {
+        val = max(val, __shfl_down_sync(mask, val, offset));
     }
     
-    // Store final result in shared memory and broadcast it
-    if (group_thread_id == 0) {  
-        temp[0] = val;
-    }
-
-    g.sync();
-
-    // All threads read the result from shared memory
-    return temp[0];
+    // Broadcast result from thread 0 to all threads in the group
+    return __shfl_sync(mask, val, 0);
 }
 
-inline __device__ void manual_warpSum(float& val, const cg::thread_group& warp) {  
-    // Get thread ID within warp  
-    unsigned int lane = warp.thread_rank();
-    //unsigned long long warp_mask = 0xFFFFFFFFFFFFFFFFULL; 
+inline __device__ void manual_warpSum(float& val) {  
     unsigned long long warp_mask = __activemask();
       
     // Perform warp-level sum  
-    for (int offset = warp.size() / 2; offset > 0; offset /= 2) {  
+    for (int offset = 32 ; offset > 0; offset /= 2) {  
         float other = __shfl_down_sync(warp_mask, val, offset);  
         val += other;  
     }  
@@ -211,26 +220,26 @@ inline __device__ void manual_warpSum(float& val, const cg::thread_group& warp) 
 }  
   
 // For vec2 type  
-inline __device__ void manual_warpSum(vec2& v, const cg::thread_group& warp) {  
+inline __device__ void manual_warpSum(vec2& v) {  
     float x = v.x;  
     float y = v.y;  
       
-    manual_warpSum(x, warp);  
-    manual_warpSum(y, warp);
+    manual_warpSum(x);  
+    manual_warpSum(y);
       
     v.x = x;  
     v.y = y;  
 }  
   
 // For vec3 type  
-inline __device__ void manual_warpSum(vec3& v, const cg::thread_group& warp) {  
+inline __device__ void manual_warpSum(vec3& v) {  
     float x = v.x;  
     float y = v.y;  
     float z = v.z;  
       
-    manual_warpSum(x, warp);  
-    manual_warpSum(y, warp);  
-    manual_warpSum(z, warp);  
+    manual_warpSum(x);  
+    manual_warpSum(y);  
+    manual_warpSum(z);  
       
     v.x = x;  
     v.y = y;  
@@ -238,16 +247,16 @@ inline __device__ void manual_warpSum(vec3& v, const cg::thread_group& warp) {
 }
 
 // For vec4 type  
-inline __device__ void manual_warpSum(vec4& v, const cg::thread_group& warp) {  
+inline __device__ void manual_warpSum(vec4& v) {  
     float x = v.x;  
     float y = v.y;  
     float z = v.z;
     float w = v.w;  
       
-    manual_warpSum(x, warp);  
-    manual_warpSum(y, warp);  
-    manual_warpSum(z, warp); 
-    manual_warpSum(w, warp); 
+    manual_warpSum(x);  
+    manual_warpSum(y);  
+    manual_warpSum(z); 
+    manual_warpSum(w); 
       
     v.x = x;  
     v.y = y;  
@@ -257,9 +266,9 @@ inline __device__ void manual_warpSum(vec4& v, const cg::thread_group& warp) {
   
 // For array type (like v_rgb_local)  
 template <int N>  
-inline __device__ void manual_warpSum(float val[N], const cg::thread_group& warp) {  
+inline __device__ void manual_warpSum(float val[N]) {  
     for (int i = 0; i < N; i++) {  
-        manual_warpSum(val[i], warp);  
+        manual_warpSum(val[i]);  
     }  
 }
 
