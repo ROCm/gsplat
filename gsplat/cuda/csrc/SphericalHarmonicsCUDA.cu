@@ -476,9 +476,9 @@ __global__ void spherical_harmonics_bwd_kernel(
         v_dirs == nullptr ? nullptr : &v_dir
     );
     if (v_dirs != nullptr) {
-        gpuAtomicAdd(v_dirs + elem_id * 3, v_dir.x);
-        gpuAtomicAdd(v_dirs + elem_id * 3 + 1, v_dir.y);
-        gpuAtomicAdd(v_dirs + elem_id * 3 + 2, v_dir.z);
+        unsafeAtomicAdd(v_dirs + elem_id * 3, v_dir.x);
+        unsafeAtomicAdd(v_dirs + elem_id * 3 + 1, v_dir.y);
+        unsafeAtomicAdd(v_dirs + elem_id * 3 + 2, v_dir.z);
     }
 }
 
@@ -533,3 +533,4 @@ void launch_spherical_harmonics_bwd_kernel(
 }
 
 } // namespace gsplat
+

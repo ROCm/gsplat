@@ -457,10 +457,10 @@ __global__ void projection_2dgs_fused_bwd_kernel(
 
         if (warp_thread_id == my_warp_leader_lane_id) {
             scalar_t* target_v_means_ptr = v_means + bid * N * 3 + gid * 3;
-            // --- FIX: Cast float to scalar_t for gpuAtomicAdd ---
-            gpuAtomicAdd(&(target_v_means_ptr[0]), static_cast<scalar_t>(v_mean.x));
-            gpuAtomicAdd(&(target_v_means_ptr[1]), static_cast<scalar_t>(v_mean.y));
-            gpuAtomicAdd(&(target_v_means_ptr[2]), static_cast<scalar_t>(v_mean.z));
+            // --- FIX: Cast float to scalar_t for unsafeAtomicAdd ---
+            unsafeAtomicAdd(&(target_v_means_ptr[0]), static_cast<scalar_t>(v_mean.x));
+            unsafeAtomicAdd(&(target_v_means_ptr[1]), static_cast<scalar_t>(v_mean.y));
+            unsafeAtomicAdd(&(target_v_means_ptr[2]), static_cast<scalar_t>(v_mean.z));
         }
     }
     manual_dynamic_reduce_sum_vec4(v_quat, gid, warp_thread_id, warp_active_mask);
@@ -478,13 +478,13 @@ __global__ void projection_2dgs_fused_bwd_kernel(
     if (warp_thread_id == my_warp_leader_lane_id) {
         scalar_t* target_v_quats_ptr = v_quats + bid * N * 4 + gid * 4;
         scalar_t* target_v_scales_ptr = v_scales + bid * N * 3 + gid * 3;
-        // --- FIX: Cast float to scalar_t for gpuAtomicAdd ---
-        gpuAtomicAdd(target_v_quats_ptr,     static_cast<scalar_t>(v_quat.x));
-        gpuAtomicAdd(target_v_quats_ptr + 1, static_cast<scalar_t>(v_quat.y));
-        gpuAtomicAdd(target_v_quats_ptr + 2, static_cast<scalar_t>(v_quat.z));
-        gpuAtomicAdd(target_v_quats_ptr + 3, static_cast<scalar_t>(v_quat.w));
-        gpuAtomicAdd(target_v_scales_ptr,    static_cast<scalar_t>(v_scale.x));
-        gpuAtomicAdd(target_v_scales_ptr + 1, static_cast<scalar_t>(v_scale.y));
+        // --- FIX: Cast float to scalar_t for unsafeAtomicAdd ---
+        unsafeAtomicAdd(target_v_quats_ptr,     static_cast<scalar_t>(v_quat.x));
+        unsafeAtomicAdd(target_v_quats_ptr + 1, static_cast<scalar_t>(v_quat.y));
+        unsafeAtomicAdd(target_v_quats_ptr + 2, static_cast<scalar_t>(v_quat.z));
+        unsafeAtomicAdd(target_v_quats_ptr + 3, static_cast<scalar_t>(v_quat.w));
+        unsafeAtomicAdd(target_v_scales_ptr,    static_cast<scalar_t>(v_scale.x));
+        unsafeAtomicAdd(target_v_scales_ptr + 1, static_cast<scalar_t>(v_scale.y));
     }
     #else
     auto warp_group_g = cg::labeled_partition(warp, gid);
@@ -494,7 +494,7 @@ __global__ void projection_2dgs_fused_bwd_kernel(
             v_means += bid * N * 3 + gid * 3;
 #pragma unroll
             for (uint32_t i = 0; i < 3; i++) {
-                gpuAtomicAdd(v_means + i, v_mean[i]);
+                unsafeAtomicAdd(v_means + i, v_mean[i]);
             }
         }
     }
@@ -505,12 +505,12 @@ __global__ void projection_2dgs_fused_bwd_kernel(
     if (warp_group_g.thread_rank() == 0) {
         v_quats += bid * N * 4 + gid * 4;
         v_scales += bid * N * 3 + gid * 3;
-        gpuAtomicAdd(v_quats, v_quat[0]);
-        gpuAtomicAdd(v_quats + 1, v_quat[1]);
-        gpuAtomicAdd(v_quats + 2, v_quat[2]);
-        gpuAtomicAdd(v_quats + 3, v_quat[3]);
-        gpuAtomicAdd(v_scales, v_scale[0]);
-        gpuAtomicAdd(v_scales + 1, v_scale[1]);
+        unsafeAtomicAdd(v_quats, v_quat[0]);
+        unsafeAtomicAdd(v_quats + 1, v_quat[1]);
+        unsafeAtomicAdd(v_quats + 2, v_quat[2]);
+        unsafeAtomicAdd(v_quats + 3, v_quat[3]);
+        unsafeAtomicAdd(v_scales, v_scale[0]);
+        unsafeAtomicAdd(v_scales + 1, v_scale[1]);
     }
     #endif
 
@@ -534,14 +534,14 @@ __global__ void projection_2dgs_fused_bwd_kernel(
                 for (uint32_t j = 0; j < 3; j++) { // cols (0, 1, 2) - rotation part
                     // v_R_local is GLM (column-major). target_v_viewmats_ptr is row-major.
                     // Access [col][row] for v_R_local to transpose to row-major output.
-                    // --- FIX: Cast float to scalar_t for gpuAtomicAdd ---
-                    gpuAtomicAdd(target_v_viewmats_ptr + i * 4 + j, static_cast<scalar_t>(v_R[j][i]));
+                    // --- FIX: Cast float to scalar_t for unsafeAtomicAdd ---
+                    unsafeAtomicAdd(target_v_viewmats_ptr + i * 4 + j, static_cast<scalar_t>(v_R[j][i]));
                 }
                 // Add translation components to the 4th column (index 3)
-                // --- FIX: Cast float to scalar_t for gpuAtomicAdd ---
-                if (i == 0) gpuAtomicAdd(target_v_viewmats_ptr + i * 4 + 3, static_cast<scalar_t>(v_t.x));
-                if (i == 1) gpuAtomicAdd(target_v_viewmats_ptr + i * 4 + 3, static_cast<scalar_t>(v_t.y));
-                if (i == 2) gpuAtomicAdd(target_v_viewmats_ptr + i * 4 + 3, static_cast<scalar_t>(v_t.z));
+                // --- FIX: Cast float to scalar_t for unsafeAtomicAdd ---
+                if (i == 0) unsafeAtomicAdd(target_v_viewmats_ptr + i * 4 + 3, static_cast<scalar_t>(v_t.x));
+                if (i == 1) unsafeAtomicAdd(target_v_viewmats_ptr + i * 4 + 3, static_cast<scalar_t>(v_t.y));
+                if (i == 2) unsafeAtomicAdd(target_v_viewmats_ptr + i * 4 + 3, static_cast<scalar_t>(v_t.z));
             }
         }
         #else
@@ -554,9 +554,9 @@ __global__ void projection_2dgs_fused_bwd_kernel(
             for (uint32_t i = 0; i < 3; i++) {
 #pragma unroll
                 for (uint32_t j = 0; j < 3; j++) {
-                    gpuAtomicAdd(v_viewmats + i * 4 + j, v_R[j][i]);
+                    unsafeAtomicAdd(v_viewmats + i * 4 + j, v_R[j][i]);
                 }
-                gpuAtomicAdd(v_viewmats + i * 4 + 3, v_t[i]);
+                unsafeAtomicAdd(v_viewmats + i * 4 + 3, v_t[i]);
             }
         }
         #endif
@@ -627,3 +627,4 @@ void launch_projection_2dgs_fused_bwd_kernel(
 }
 
 } // namespace gsplat
+

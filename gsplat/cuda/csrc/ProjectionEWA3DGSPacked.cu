@@ -634,10 +634,10 @@ if (idx % 100000 == 0 && DEBUG_PRINT) {
 
             if (warp_thread_id == my_warp_leader_lane_id) {
                 scalar_t* target_v_means_ptr = v_means + bid * N * 3 + gid * 3;
-                // --- FIX: Cast float to scalar_t for gpuAtomicAdd ---
-                gpuAtomicAdd(&(target_v_means_ptr[0]), static_cast<scalar_t>(v_mean_local.x));
-                gpuAtomicAdd(&(target_v_means_ptr[1]), static_cast<scalar_t>(v_mean_local.y));
-                gpuAtomicAdd(&(target_v_means_ptr[2]), static_cast<scalar_t>(v_mean_local.z));
+                // --- FIX: Cast float to scalar_t for unsafeAtomicAdd ---
+                unsafeAtomicAdd(&(target_v_means_ptr[0]), static_cast<scalar_t>(v_mean_local.x));
+                unsafeAtomicAdd(&(target_v_means_ptr[1]), static_cast<scalar_t>(v_mean_local.y));
+                unsafeAtomicAdd(&(target_v_means_ptr[2]), static_cast<scalar_t>(v_mean_local.z));
             }
         }
         if (v_covars != nullptr) {
@@ -660,13 +660,13 @@ if (idx % 100000 == 0 && DEBUG_PRINT) {
             if (warp_thread_id == my_warp_leader_lane_id) {
                 scalar_t* target_v_covars_ptr = v_covars + bid * N * 6 + gid * 6;
                 // Accumulate unique elements of the symmetric covariance gradient
-                // --- FIX: Cast float to scalar_t for gpuAtomicAdd ---
-                gpuAtomicAdd(target_v_covars_ptr,     static_cast<scalar_t>(v_covar_local[0][0]));
-                gpuAtomicAdd(target_v_covars_ptr + 1, static_cast<scalar_t>(v_covar_local[0][1] + v_covar_local[1][0])); // xy and yx
-                gpuAtomicAdd(target_v_covars_ptr + 2, static_cast<scalar_t>(v_covar_local[0][2] + v_covar_local[2][0])); // xz and zx
-                gpuAtomicAdd(target_v_covars_ptr + 3, static_cast<scalar_t>(v_covar_local[1][1]));
-                gpuAtomicAdd(target_v_covars_ptr + 4, static_cast<scalar_t>(v_covar_local[1][2] + v_covar_local[2][1])); // yz and zy
-                gpuAtomicAdd(target_v_covars_ptr + 5, static_cast<scalar_t>(v_covar_local[2][2]));
+                // --- FIX: Cast float to scalar_t for unsafeAtomicAdd ---
+                unsafeAtomicAdd(target_v_covars_ptr,     static_cast<scalar_t>(v_covar_local[0][0]));
+                unsafeAtomicAdd(target_v_covars_ptr + 1, static_cast<scalar_t>(v_covar_local[0][1] + v_covar_local[1][0])); // xy and yx
+                unsafeAtomicAdd(target_v_covars_ptr + 2, static_cast<scalar_t>(v_covar_local[0][2] + v_covar_local[2][0])); // xz and zx
+                unsafeAtomicAdd(target_v_covars_ptr + 3, static_cast<scalar_t>(v_covar_local[1][1]));
+                unsafeAtomicAdd(target_v_covars_ptr + 4, static_cast<scalar_t>(v_covar_local[1][2] + v_covar_local[2][1])); // yz and zy
+                unsafeAtomicAdd(target_v_covars_ptr + 5, static_cast<scalar_t>(v_covar_local[2][2]));
             }
         } else { // Handle v_quats and v_scales if covars are not provided
             vec4 v_quat_local(0.f);   // Local gradient for quaternion
@@ -692,14 +692,14 @@ if (idx % 100000 == 0 && DEBUG_PRINT) {
             if (warp_thread_id == my_warp_leader_lane_id) {
                 scalar_t* target_v_quats_ptr = v_quats + bid * N * 4 + gid * 4;
                 scalar_t* target_v_scales_ptr = v_scales + bid * N * 3 + gid * 3;
-                // --- FIX: Cast float to scalar_t for gpuAtomicAdd ---
-                gpuAtomicAdd(target_v_quats_ptr,     static_cast<scalar_t>(v_quat_local.x));
-                gpuAtomicAdd(target_v_quats_ptr + 1, static_cast<scalar_t>(v_quat_local.y));
-                gpuAtomicAdd(target_v_quats_ptr + 2, static_cast<scalar_t>(v_quat_local.z));
-                gpuAtomicAdd(target_v_quats_ptr + 3, static_cast<scalar_t>(v_quat_local.w));
-                gpuAtomicAdd(target_v_scales_ptr,    static_cast<scalar_t>(v_scale_local.x));
-                gpuAtomicAdd(target_v_scales_ptr + 1, static_cast<scalar_t>(v_scale_local.y));
-                gpuAtomicAdd(target_v_scales_ptr + 2, static_cast<scalar_t>(v_scale_local.z));
+                // --- FIX: Cast float to scalar_t for unsafeAtomicAdd ---
+                unsafeAtomicAdd(target_v_quats_ptr,     static_cast<scalar_t>(v_quat_local.x));
+                unsafeAtomicAdd(target_v_quats_ptr + 1, static_cast<scalar_t>(v_quat_local.y));
+                unsafeAtomicAdd(target_v_quats_ptr + 2, static_cast<scalar_t>(v_quat_local.z));
+                unsafeAtomicAdd(target_v_quats_ptr + 3, static_cast<scalar_t>(v_quat_local.w));
+                unsafeAtomicAdd(target_v_scales_ptr,    static_cast<scalar_t>(v_scale_local.x));
+                unsafeAtomicAdd(target_v_scales_ptr + 1, static_cast<scalar_t>(v_scale_local.y));
+                unsafeAtomicAdd(target_v_scales_ptr + 2, static_cast<scalar_t>(v_scale_local.z));
             }
         }
         #else // USE_ROCM is 0, use Cooperative Groups Labeled Partition
@@ -714,10 +714,10 @@ if (idx % 100000 == 0 && DEBUG_PRINT) {
             }
             if (warp_group_g.thread_rank() == 0) { // Only leader of the group writes
                 scalar_t* target_v_means_ptr = v_means + bid * N * 3 + gid * 3;
-                // --- FIX: Cast float to scalar_t for gpuAtomicAdd ---
-                gpuAtomicAdd(&(target_v_means_ptr[0]), static_cast<scalar_t>(v_mean_local.x));
-                gpuAtomicAdd(&(target_v_means_ptr[1]), static_cast<scalar_t>(v_mean_local.y));
-                gpuAtomicAdd(&(target_v_means_ptr[2]), static_cast<scalar_t>(v_mean_local.z));
+                // --- FIX: Cast float to scalar_t for unsafeAtomicAdd ---
+                unsafeAtomicAdd(&(target_v_means_ptr[0]), static_cast<scalar_t>(v_mean_local.x));
+                unsafeAtomicAdd(&(target_v_means_ptr[1]), static_cast<scalar_t>(v_mean_local.y));
+                unsafeAtomicAdd(&(target_v_means_ptr[2]), static_cast<scalar_t>(v_mean_local.z));
             }
         }
         if (v_covars != nullptr) {
@@ -725,13 +725,13 @@ if (idx % 100000 == 0 && DEBUG_PRINT) {
             if (warp_group_g.thread_rank() == 0) { // Only leader of the group writes
                 scalar_t* target_v_covars_ptr = v_covars + bid * N * 6 + gid * 6;
                 // Accumulate unique elements of the symmetric covariance gradient
-                // --- FIX: Cast float to scalar_t for gpuAtomicAdd ---
-                gpuAtomicAdd(target_v_covars_ptr,     static_cast<scalar_t>(v_covar_local[0][0]));
-                gpuAtomicAdd(target_v_covars_ptr + 1, static_cast<scalar_t>(v_covar_local[0][1] + v_covar_local[1][0]));
-                gpuAtomicAdd(target_v_covars_ptr + 2, static_cast<scalar_t>(v_covar_local[0][2] + v_covar_local[2][0]));
-                gpuAtomicAdd(target_v_covars_ptr + 3, static_cast<scalar_t>(v_covar_local[1][1]));
-                gpuAtomicAdd(target_v_covars_ptr + 4, static_cast<scalar_t>(v_covar_local[1][2] + v_covar_local[2][1]));
-                gpuAtomicAdd(target_v_covars_ptr + 5, static_cast<scalar_t>(v_covar_local[2][2]));
+                // --- FIX: Cast float to scalar_t for unsafeAtomicAdd ---
+                unsafeAtomicAdd(target_v_covars_ptr,     static_cast<scalar_t>(v_covar_local[0][0]));
+                unsafeAtomicAdd(target_v_covars_ptr + 1, static_cast<scalar_t>(v_covar_local[0][1] + v_covar_local[1][0]));
+                unsafeAtomicAdd(target_v_covars_ptr + 2, static_cast<scalar_t>(v_covar_local[0][2] + v_covar_local[2][0]));
+                unsafeAtomicAdd(target_v_covars_ptr + 3, static_cast<scalar_t>(v_covar_local[1][1]));
+                unsafeAtomicAdd(target_v_covars_ptr + 4, static_cast<scalar_t>(v_covar_local[1][2] + v_covar_local[2][1]));
+                unsafeAtomicAdd(target_v_covars_ptr + 5, static_cast<scalar_t>(v_covar_local[2][2]));
             }
         } else {
             // Directly output gradients w.r.t. the quaternion and scale
@@ -747,14 +747,14 @@ if (idx % 100000 == 0 && DEBUG_PRINT) {
             if (warp_group_g.thread_rank() == 0) { // Only leader of the group writes
                 scalar_t* target_v_quats_ptr = v_quats + bid * N * 4 + gid * 4;
                 scalar_t* target_v_scales_ptr = v_scales + bid * N * 3 + gid * 3;
-                // --- FIX: Cast float to scalar_t for gpuAtomicAdd ---
-                gpuAtomicAdd(target_v_quats_ptr,     static_cast<scalar_t>(v_quat_local.x));
-                gpuAtomicAdd(target_v_quats_ptr + 1, static_cast<scalar_t>(v_quat_local.y));
-                gpuAtomicAdd(target_v_quats_ptr + 2, static_cast<scalar_t>(v_quat_local.z));
-                gpuAtomicAdd(target_v_quats_ptr + 3, static_cast<scalar_t>(v_quat_local.w));
-                gpuAtomicAdd(target_v_scales_ptr,    static_cast<scalar_t>(v_scale_local.x));
-                gpuAtomicAdd(target_v_scales_ptr + 1, static_cast<scalar_t>(v_scale_local.y));
-                gpuAtomicAdd(target_v_scales_ptr + 2, static_cast<scalar_t>(v_scale_local.z));
+                // --- FIX: Cast float to scalar_t for unsafeAtomicAdd ---
+                unsafeAtomicAdd(target_v_quats_ptr,     static_cast<scalar_t>(v_quat_local.x));
+                unsafeAtomicAdd(target_v_quats_ptr + 1, static_cast<scalar_t>(v_quat_local.y));
+                unsafeAtomicAdd(target_v_quats_ptr + 2, static_cast<scalar_t>(v_quat_local.z));
+                unsafeAtomicAdd(target_v_quats_ptr + 3, static_cast<scalar_t>(v_quat_local.w));
+                unsafeAtomicAdd(target_v_scales_ptr,    static_cast<scalar_t>(v_scale_local.x));
+                unsafeAtomicAdd(target_v_scales_ptr + 1, static_cast<scalar_t>(v_scale_local.y));
+                unsafeAtomicAdd(target_v_scales_ptr + 2, static_cast<scalar_t>(v_scale_local.z));
             }
         }
         #endif
@@ -817,14 +817,14 @@ if (idx % 100000 == 0 && DEBUG_PRINT) {
                 for (uint32_t j = 0; j < 3; j++) { // cols (0, 1, 2) - rotation part
                     // v_R_local is GLM (column-major). target_v_viewmats_ptr is row-major.
                     // Access [col][row] for v_R_local to transpose to row-major output.
-                    // --- FIX: Cast float to scalar_t for gpuAtomicAdd ---
-                    gpuAtomicAdd(target_v_viewmats_ptr + i * 4 + j, static_cast<scalar_t>(v_R_local[j][i]));
+                    // --- FIX: Cast float to scalar_t for unsafeAtomicAdd ---
+                    unsafeAtomicAdd(target_v_viewmats_ptr + i * 4 + j, static_cast<scalar_t>(v_R_local[j][i]));
                 }
                 // Add translation components to the 4th column (index 3)
-                // --- FIX: Cast float to scalar_t for gpuAtomicAdd ---
-                if (i == 0) gpuAtomicAdd(target_v_viewmats_ptr + i * 4 + 3, static_cast<scalar_t>(v_t_local.x));
-                if (i == 1) gpuAtomicAdd(target_v_viewmats_ptr + i * 4 + 3, static_cast<scalar_t>(v_t_local.y));
-                if (i == 2) gpuAtomicAdd(target_v_viewmats_ptr + i * 4 + 3, static_cast<scalar_t>(v_t_local.z));
+                // --- FIX: Cast float to scalar_t for unsafeAtomicAdd ---
+                if (i == 0) unsafeAtomicAdd(target_v_viewmats_ptr + i * 4 + 3, static_cast<scalar_t>(v_t_local.x));
+                if (i == 1) unsafeAtomicAdd(target_v_viewmats_ptr + i * 4 + 3, static_cast<scalar_t>(v_t_local.y));
+                if (i == 2) unsafeAtomicAdd(target_v_viewmats_ptr + i * 4 + 3, static_cast<scalar_t>(v_t_local.z));
             }
         }
         #else // USE_ROCM is 0, use Cooperative Groups Labeled Partition
@@ -836,14 +836,14 @@ if (idx % 100000 == 0 && DEBUG_PRINT) {
             scalar_t* target_v_viewmats_ptr = v_viewmats + bid * C * 16 + cid * 16;
             for (uint32_t i = 0; i < 3; i++) { // rows (0, 1, 2)
                 for (uint32_t j = 0; j < 3; j++) { // cols (0, 1, 2) - rotation part
-                    // --- FIX: Cast float to scalar_t for gpuAtomicAdd ---
-                    gpuAtomicAdd(target_v_viewmats_ptr + i * 4 + j, static_cast<scalar_t>(v_R_local[j][i]));
+                    // --- FIX: Cast float to scalar_t for unsafeAtomicAdd ---
+                    unsafeAtomicAdd(target_v_viewmats_ptr + i * 4 + j, static_cast<scalar_t>(v_R_local[j][i]));
                 }
                 // Add translation components to the 4th column (index 3)
-                // --- FIX: Cast float to scalar_t for gpuAtomicAdd ---
-                if (i == 0) gpuAtomicAdd(target_v_viewmats_ptr + i * 4 + 3, static_cast<scalar_t>(v_t_local.x));
-                if (i == 1) gpuAtomicAdd(target_v_viewmats_ptr + i * 4 + 3, static_cast<scalar_t>(v_t_local.y));
-                if (i == 2) gpuAtomicAdd(target_v_viewmats_ptr + i * 4 + 3, static_cast<scalar_t>(v_t_local.z));
+                // --- FIX: Cast float to scalar_t for unsafeAtomicAdd ---
+                if (i == 0) unsafeAtomicAdd(target_v_viewmats_ptr + i * 4 + 3, static_cast<scalar_t>(v_t_local.x));
+                if (i == 1) unsafeAtomicAdd(target_v_viewmats_ptr + i * 4 + 3, static_cast<scalar_t>(v_t_local.y));
+                if (i == 2) unsafeAtomicAdd(target_v_viewmats_ptr + i * 4 + 3, static_cast<scalar_t>(v_t_local.z));
             }
         }
         #endif
