@@ -106,6 +106,13 @@ __global__ void rasterize_to_pixels_3dgs_bwd_kernel(
         reinterpret_cast<vec3 *>(&xy_opacity_batch[block_size]); // [block_size]
     float *rgbs_batch =
         (float *)&conic_batch[block_size]; // [block_size * CDIM]
+    
+    #if USE_ROCM
+    using warp_reduce_float_t = rocprim::warp_reduce<float,64>;
+    auto* warp_storage_base   =
+    (typename warp_reduce_float_t::storage_type*)
+        (rgbs_batch + block_size * CDIM);
+    #endif
 
     // this is the T AFTER the last gaussian in this pixel
     float T_final = 1.0f - render_alphas[pix_id];
@@ -134,7 +141,13 @@ __global__ void rasterize_to_pixels_3dgs_bwd_kernel(
     #endif
     
     #if USE_ROCM
-    const int32_t warp_bin_final = reduce_max_shuffle(bin_final);  
+        __shared__ typename rocprim::warp_reduce<int32_t, 64>::storage_type warp_storage;
+        rocprim::warp_reduce<int32_t, 64> wreduce;
+        int32_t warp_bin_final;
+        wreduce.reduce( bin_final,            // 1) value held by this lane
+                warp_bin_final,               // 2) reference that will receive the result
+                warp_storage,                 // 3) shared-memory storage
+                rocprim::maximum<int32_t>()); // 4) binary operator
     #else
     const int32_t warp_bin_final =
         cg::reduce(warp, bin_final, cg::greater<int>());
@@ -256,13 +269,12 @@ __global__ void rasterize_to_pixels_3dgs_bwd_kernel(
                 }
             }
             #if USE_ROCM
-            manual_warpSum<CDIM>(v_rgb_local);
-            manual_warpSum(v_conic_local);
-            manual_warpSum(v_xy_local);
-            if (v_means2d_abs != nullptr) {
-                manual_warpSum(v_xy_abs_local);
-            }
-            manual_warpSum(v_opacity_local);
+            rocprim_warpSum<CDIM, 64>(v_rgb_local, warp_storage_base);   // CDIM-sized float array
+            rocprim_warpSum<64>(v_conic_local, warp_storage_base); // float
+            rocprim_warpSum<64>(v_xy_local, warp_storage_base);    // vec2
+            if (v_means2d_abs != nullptr)
+                rocprim_warpSum<64>(v_xy_abs_local, warp_storage_base);// vec2
+            rocprim_warpSum<64>(v_opacity_local, warp_storage_base);// float
             if (warp.thread_rank() == 0) {
                 int32_t g = id_batch[t]; // flatten index in [I * N] or [nnz]
                 float *v_rgb_ptr = (float *)(v_colors) + CDIM * g;
@@ -368,9 +380,21 @@ void launch_rasterize_to_pixels_3dgs_bwd_kernel(
     dim3 threads = {tile_size, tile_size, 1};
     dim3 grid = {I, tile_height, tile_width};
 
+    // int64_t shmem_size =
+    //     tile_size * tile_size *
+    //     (sizeof(int32_t) + sizeof(vec3) + sizeof(vec3) + sizeof(float) * CDIM);
+
+    //rocPRIM shared memory allocation
+    const uint32_t block_size = tile_size * tile_size;
+    const uint32_t warps_per_block =
+        (block_size + 63) / 64;                       // for 64-lane warp
+    std::size_t warp_scratch_bytes =
+        warps_per_block * sizeof(typename rocprim::warp_reduce<float,64>::storage_type);
+
+
     int64_t shmem_size =
         tile_size * tile_size *
-        (sizeof(int32_t) + sizeof(vec3) + sizeof(vec3) + sizeof(float) * CDIM);
+        (sizeof(int32_t) + sizeof(vec3) + sizeof(vec3) + sizeof(float) * CDIM) + warp_scratch_bytes ;
 
     if (n_isects == 0) {
         // skip the kernel launch if there are no elements
