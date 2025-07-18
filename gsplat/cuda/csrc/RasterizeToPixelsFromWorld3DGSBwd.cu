@@ -380,26 +380,26 @@ __global__ void rasterize_to_pixels_from_world_3dgs_bwd_kernel(
                 float *v_rgb_ptr = (float *)(v_colors) + CDIM * isect_id;
 #pragma unroll
                 for (uint32_t k = 0; k < CDIM; ++k) {
-                    gpuAtomicAdd(v_rgb_ptr + k, v_rgb_local[k]);
+                    unsafeAtomicAdd(v_rgb_ptr + k, v_rgb_local[k]);
                 }
 
                 float *v_mean_ptr = (float *)(v_means) + 3 * (isect_bid * N + isect_gid);
-                gpuAtomicAdd(v_mean_ptr, v_mean_local.x);
-                gpuAtomicAdd(v_mean_ptr + 1, v_mean_local.y);
-                gpuAtomicAdd(v_mean_ptr + 2, v_mean_local.z);
+                unsafeAtomicAdd(v_mean_ptr, v_mean_local.x);
+                unsafeAtomicAdd(v_mean_ptr + 1, v_mean_local.y);
+                unsafeAtomicAdd(v_mean_ptr + 2, v_mean_local.z);
 
                 float *v_scale_ptr = (float *)(v_scales) + 3 * (isect_bid * N + isect_gid);
-                gpuAtomicAdd(v_scale_ptr, v_scale_local.x);
-                gpuAtomicAdd(v_scale_ptr + 1, v_scale_local.y);
-                gpuAtomicAdd(v_scale_ptr + 2, v_scale_local.z);
+                unsafeAtomicAdd(v_scale_ptr, v_scale_local.x);
+                unsafeAtomicAdd(v_scale_ptr + 1, v_scale_local.y);
+                unsafeAtomicAdd(v_scale_ptr + 2, v_scale_local.z);
 
                 float *v_quat_ptr = (float *)(v_quats) + 4 * (isect_bid * N + isect_gid);
-                gpuAtomicAdd(v_quat_ptr, v_quat_local.x);
-                gpuAtomicAdd(v_quat_ptr + 1, v_quat_local.y);
-                gpuAtomicAdd(v_quat_ptr + 2, v_quat_local.z);
-                gpuAtomicAdd(v_quat_ptr + 3, v_quat_local.w);
+                unsafeAtomicAdd(v_quat_ptr, v_quat_local.x);
+                unsafeAtomicAdd(v_quat_ptr + 1, v_quat_local.y);
+                unsafeAtomicAdd(v_quat_ptr + 2, v_quat_local.z);
+                unsafeAtomicAdd(v_quat_ptr + 3, v_quat_local.w);
 
-                gpuAtomicAdd(v_opacities + isect_id, v_opacity_local);
+                unsafeAtomicAdd(v_opacities + isect_id, v_opacity_local);
             }
         }
     }
@@ -613,3 +613,4 @@ __INS__(513)
 #undef __INS__
 
 } // namespace gsplat
+

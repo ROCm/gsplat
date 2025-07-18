@@ -660,38 +660,38 @@ __global__ void rasterize_to_pixels_2dgs_bwd_kernel(
                 float *v_rgb_ptr = (float *)(v_colors) + CDIM * g;
 #pragma unroll
                 for (uint32_t k = 0; k < CDIM; ++k) {
-                    gpuAtomicAdd(v_rgb_ptr + k, v_rgb_local[k]);
+                    unsafeAtomicAdd(v_rgb_ptr + k, v_rgb_local[k]);
                 }
 
                 float *v_normal_ptr = (float *)(v_normals) + 3 * g;
 #pragma unroll
                 for (uint32_t k = 0; k < 3; ++k) {
-                    gpuAtomicAdd(v_normal_ptr + k, v_normal_local[k]);
+                    unsafeAtomicAdd(v_normal_ptr + k, v_normal_local[k]);
                 }
 
                 float *v_ray_transforms_ptr =
                     (float *)(v_ray_transforms) + 9 * g;
-                gpuAtomicAdd(v_ray_transforms_ptr, v_u_M_local.x);
-                gpuAtomicAdd(v_ray_transforms_ptr + 1, v_u_M_local.y);
-                gpuAtomicAdd(v_ray_transforms_ptr + 2, v_u_M_local.z);
-                gpuAtomicAdd(v_ray_transforms_ptr + 3, v_v_M_local.x);
-                gpuAtomicAdd(v_ray_transforms_ptr + 4, v_v_M_local.y);
-                gpuAtomicAdd(v_ray_transforms_ptr + 5, v_v_M_local.z);
-                gpuAtomicAdd(v_ray_transforms_ptr + 6, v_w_M_local.x);
-                gpuAtomicAdd(v_ray_transforms_ptr + 7, v_w_M_local.y);
-                gpuAtomicAdd(v_ray_transforms_ptr + 8, v_w_M_local.z);
+                unsafeAtomicAdd(v_ray_transforms_ptr, v_u_M_local.x);
+                unsafeAtomicAdd(v_ray_transforms_ptr + 1, v_u_M_local.y);
+                unsafeAtomicAdd(v_ray_transforms_ptr + 2, v_u_M_local.z);
+                unsafeAtomicAdd(v_ray_transforms_ptr + 3, v_v_M_local.x);
+                unsafeAtomicAdd(v_ray_transforms_ptr + 4, v_v_M_local.y);
+                unsafeAtomicAdd(v_ray_transforms_ptr + 5, v_v_M_local.z);
+                unsafeAtomicAdd(v_ray_transforms_ptr + 6, v_w_M_local.x);
+                unsafeAtomicAdd(v_ray_transforms_ptr + 7, v_w_M_local.y);
+                unsafeAtomicAdd(v_ray_transforms_ptr + 8, v_w_M_local.z);
 
                 float *v_xy_ptr = (float *)(v_means2d) + 2 * g;
-                gpuAtomicAdd(v_xy_ptr, v_xy_local.x);
-                gpuAtomicAdd(v_xy_ptr + 1, v_xy_local.y);
+                unsafeAtomicAdd(v_xy_ptr, v_xy_local.x);
+                unsafeAtomicAdd(v_xy_ptr + 1, v_xy_local.y);
 
                 if (v_means2d_abs != nullptr) {
                     float *v_xy_abs_ptr = (float *)(v_means2d_abs) + 2 * g;
-                    gpuAtomicAdd(v_xy_abs_ptr, v_xy_abs_local.x);
-                    gpuAtomicAdd(v_xy_abs_ptr + 1, v_xy_abs_local.y);
+                    unsafeAtomicAdd(v_xy_abs_ptr, v_xy_abs_local.x);
+                    unsafeAtomicAdd(v_xy_abs_ptr + 1, v_xy_abs_local.y);
                 }
 
-                gpuAtomicAdd(v_opacities + g, v_opacity_local);
+                unsafeAtomicAdd(v_opacities + g, v_opacity_local);
             }
 
             if (valid) {
@@ -898,3 +898,4 @@ __INS__(513)
 #undef __INS__
 
 } // namespace gsplat
+

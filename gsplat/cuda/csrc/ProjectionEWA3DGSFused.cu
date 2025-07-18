@@ -497,10 +497,10 @@ __global__ void projection_ewa_3dgs_fused_bwd_kernel(
 
         if (warp_thread_id == my_warp_leader_lane_id) {
                 scalar_t* target_v_means_ptr = v_means + bid * N * 3 + gid * 3;
-                // --- FIX: Cast float to scalar_t for gpuAtomicAdd ---
-                gpuAtomicAdd(&(target_v_means_ptr[0]), static_cast<scalar_t>(v_mean.x));
-                gpuAtomicAdd(&(target_v_means_ptr[1]), static_cast<scalar_t>(v_mean.y));
-                gpuAtomicAdd(&(target_v_means_ptr[2]), static_cast<scalar_t>(v_mean.z));
+                // --- FIX: Cast float to scalar_t for unsafeAtomicAdd ---
+                unsafeAtomicAdd(&(target_v_means_ptr[0]), static_cast<scalar_t>(v_mean.x));
+                unsafeAtomicAdd(&(target_v_means_ptr[1]), static_cast<scalar_t>(v_mean.y));
+                unsafeAtomicAdd(&(target_v_means_ptr[2]), static_cast<scalar_t>(v_mean.z));
         }
     }
     if (v_covars != nullptr) {
@@ -518,13 +518,13 @@ __global__ void projection_ewa_3dgs_fused_bwd_kernel(
         if (warp_thread_id == my_warp_leader_lane_id) {
             scalar_t* target_v_covars_ptr = v_covars + bid * N * 6 + gid * 6;
             // Accumulate unique elements of the symmetric covariance gradient
-            // --- FIX: Cast float to scalar_t for gpuAtomicAdd ---
-            gpuAtomicAdd(target_v_covars_ptr,     static_cast<scalar_t>(v_covar[0][0]));
-            gpuAtomicAdd(target_v_covars_ptr + 1, static_cast<scalar_t>(v_covar[0][1] + v_covar[1][0])); // xy and yx
-            gpuAtomicAdd(target_v_covars_ptr + 2, static_cast<scalar_t>(v_covar[0][2] + v_covar[2][0])); // xz and zx
-            gpuAtomicAdd(target_v_covars_ptr + 3, static_cast<scalar_t>(v_covar[1][1]));
-            gpuAtomicAdd(target_v_covars_ptr + 4, static_cast<scalar_t>(v_covar[1][2] + v_covar[2][1])); // yz and zy
-            gpuAtomicAdd(target_v_covars_ptr + 5, static_cast<scalar_t>(v_covar[2][2]));
+            // --- FIX: Cast float to scalar_t for unsafeAtomicAdd ---
+            unsafeAtomicAdd(target_v_covars_ptr,     static_cast<scalar_t>(v_covar[0][0]));
+            unsafeAtomicAdd(target_v_covars_ptr + 1, static_cast<scalar_t>(v_covar[0][1] + v_covar[1][0])); // xy and yx
+            unsafeAtomicAdd(target_v_covars_ptr + 2, static_cast<scalar_t>(v_covar[0][2] + v_covar[2][0])); // xz and zx
+            unsafeAtomicAdd(target_v_covars_ptr + 3, static_cast<scalar_t>(v_covar[1][1]));
+            unsafeAtomicAdd(target_v_covars_ptr + 4, static_cast<scalar_t>(v_covar[1][2] + v_covar[2][1])); // yz and zy
+            unsafeAtomicAdd(target_v_covars_ptr + 5, static_cast<scalar_t>(v_covar[2][2]));
         }
     } else {
             vec4 v_quat(0.f);   // Local gradient for quaternion
@@ -547,14 +547,14 @@ __global__ void projection_ewa_3dgs_fused_bwd_kernel(
             if (warp_thread_id == my_warp_leader_lane_id) {
                 scalar_t* target_v_quats_ptr = v_quats + bid * N * 4 + gid * 4;
                 scalar_t* target_v_scales_ptr = v_scales + bid * N * 3 + gid * 3;
-                // --- FIX: Cast float to scalar_t for gpuAtomicAdd ---
-                gpuAtomicAdd(target_v_quats_ptr,     static_cast<scalar_t>(v_quat.x));
-                gpuAtomicAdd(target_v_quats_ptr + 1, static_cast<scalar_t>(v_quat.y));
-                gpuAtomicAdd(target_v_quats_ptr + 2, static_cast<scalar_t>(v_quat.z));
-                gpuAtomicAdd(target_v_quats_ptr + 3, static_cast<scalar_t>(v_quat.w));
-                gpuAtomicAdd(target_v_scales_ptr,    static_cast<scalar_t>(v_scale.x));
-                gpuAtomicAdd(target_v_scales_ptr + 1, static_cast<scalar_t>(v_scale.y));
-                gpuAtomicAdd(target_v_scales_ptr + 2, static_cast<scalar_t>(v_scale.z));
+                // --- FIX: Cast float to scalar_t for unsafeAtomicAdd ---
+                unsafeAtomicAdd(target_v_quats_ptr,     static_cast<scalar_t>(v_quat.x));
+                unsafeAtomicAdd(target_v_quats_ptr + 1, static_cast<scalar_t>(v_quat.y));
+                unsafeAtomicAdd(target_v_quats_ptr + 2, static_cast<scalar_t>(v_quat.z));
+                unsafeAtomicAdd(target_v_quats_ptr + 3, static_cast<scalar_t>(v_quat.w));
+                unsafeAtomicAdd(target_v_scales_ptr,    static_cast<scalar_t>(v_scale.x));
+                unsafeAtomicAdd(target_v_scales_ptr + 1, static_cast<scalar_t>(v_scale.y));
+                unsafeAtomicAdd(target_v_scales_ptr + 2, static_cast<scalar_t>(v_scale.z));
             }
     }
     #else
@@ -565,7 +565,7 @@ __global__ void projection_ewa_3dgs_fused_bwd_kernel(
             v_means += bid * N * 3 + gid * 3;
 #pragma unroll
             for (uint32_t i = 0; i < 3; i++) {
-                gpuAtomicAdd(v_means + i, v_mean[i]);
+                unsafeAtomicAdd(v_means + i, v_mean[i]);
             }
         }
     }
@@ -574,12 +574,12 @@ __global__ void projection_ewa_3dgs_fused_bwd_kernel(
         warpSum(v_covar, warp_group_g);
         if (warp_group_g.thread_rank() == 0) {
             v_covars += bid * N * 6 + gid * 6;
-            gpuAtomicAdd(v_covars, v_covar[0][0]);
-            gpuAtomicAdd(v_covars + 1, v_covar[0][1] + v_covar[1][0]);
-            gpuAtomicAdd(v_covars + 2, v_covar[0][2] + v_covar[2][0]);
-            gpuAtomicAdd(v_covars + 3, v_covar[1][1]);
-            gpuAtomicAdd(v_covars + 4, v_covar[1][2] + v_covar[2][1]);
-            gpuAtomicAdd(v_covars + 5, v_covar[2][2]);
+            unsafeAtomicAdd(v_covars, v_covar[0][0]);
+            unsafeAtomicAdd(v_covars + 1, v_covar[0][1] + v_covar[1][0]);
+            unsafeAtomicAdd(v_covars + 2, v_covar[0][2] + v_covar[2][0]);
+            unsafeAtomicAdd(v_covars + 3, v_covar[1][1]);
+            unsafeAtomicAdd(v_covars + 4, v_covar[1][2] + v_covar[2][1]);
+            unsafeAtomicAdd(v_covars + 5, v_covar[2][2]);
         }
     } else {
         // Directly output gradients w.r.t. the quaternion and scale
@@ -592,13 +592,13 @@ __global__ void projection_ewa_3dgs_fused_bwd_kernel(
         if (warp_group_g.thread_rank() == 0) {
             v_quats += bid * N * 4 + gid * 4;
             v_scales += bid * N * 3 + gid * 3;
-            gpuAtomicAdd(v_quats, v_quat[0]);
-            gpuAtomicAdd(v_quats + 1, v_quat[1]);
-            gpuAtomicAdd(v_quats + 2, v_quat[2]);
-            gpuAtomicAdd(v_quats + 3, v_quat[3]);
-            gpuAtomicAdd(v_scales, v_scale[0]);
-            gpuAtomicAdd(v_scales + 1, v_scale[1]);
-            gpuAtomicAdd(v_scales + 2, v_scale[2]);
+            unsafeAtomicAdd(v_quats, v_quat[0]);
+            unsafeAtomicAdd(v_quats + 1, v_quat[1]);
+            unsafeAtomicAdd(v_quats + 2, v_quat[2]);
+            unsafeAtomicAdd(v_quats + 3, v_quat[3]);
+            unsafeAtomicAdd(v_scales, v_scale[0]);
+            unsafeAtomicAdd(v_scales + 1, v_scale[1]);
+            unsafeAtomicAdd(v_scales + 2, v_scale[2]);
         }
     }
     #endif
@@ -623,14 +623,14 @@ __global__ void projection_ewa_3dgs_fused_bwd_kernel(
                 for (uint32_t j = 0; j < 3; j++) { // cols (0, 1, 2) - rotation part
                     // v_R_local is GLM (column-major). target_v_viewmats_ptr is row-major.
                     // Access [col][row] for v_R_local to transpose to row-major output.
-                    // --- FIX: Cast float to scalar_t for gpuAtomicAdd ---
-                    gpuAtomicAdd(target_v_viewmats_ptr + i * 4 + j, static_cast<scalar_t>(v_R[j][i]));
+                    // --- FIX: Cast float to scalar_t for unsafeAtomicAdd ---
+                    unsafeAtomicAdd(target_v_viewmats_ptr + i * 4 + j, static_cast<scalar_t>(v_R[j][i]));
                 }
                 // Add translation components to the 4th column (index 3)
-                // --- FIX: Cast float to scalar_t for gpuAtomicAdd ---
-                if (i == 0) gpuAtomicAdd(target_v_viewmats_ptr + i * 4 + 3, static_cast<scalar_t>(v_t.x));
-                if (i == 1) gpuAtomicAdd(target_v_viewmats_ptr + i * 4 + 3, static_cast<scalar_t>(v_t.y));
-                if (i == 2) gpuAtomicAdd(target_v_viewmats_ptr + i * 4 + 3, static_cast<scalar_t>(v_t.z));
+                // --- FIX: Cast float to scalar_t for unsafeAtomicAdd ---
+                if (i == 0) unsafeAtomicAdd(target_v_viewmats_ptr + i * 4 + 3, static_cast<scalar_t>(v_t.x));
+                if (i == 1) unsafeAtomicAdd(target_v_viewmats_ptr + i * 4 + 3, static_cast<scalar_t>(v_t.y));
+                if (i == 2) unsafeAtomicAdd(target_v_viewmats_ptr + i * 4 + 3, static_cast<scalar_t>(v_t.z));
             }
         }
         #else
@@ -643,9 +643,9 @@ __global__ void projection_ewa_3dgs_fused_bwd_kernel(
             for (uint32_t i = 0; i < 3; i++) { // rows
 #pragma unroll
                 for (uint32_t j = 0; j < 3; j++) { // cols
-                    gpuAtomicAdd(v_viewmats + i * 4 + j, v_R[j][i]);
+                    unsafeAtomicAdd(v_viewmats + i * 4 + j, v_R[j][i]);
                 }
-                gpuAtomicAdd(v_viewmats + i * 4 + 3, v_t[i]);
+                unsafeAtomicAdd(v_viewmats + i * 4 + 3, v_t[i]);
             }
         }
         #endif
@@ -746,3 +746,4 @@ void launch_projection_ewa_3dgs_fused_bwd_kernel(
 }
 
 } // namespace gsplat
+
