@@ -16,6 +16,7 @@
 #include <ATen/hip/Atomic.cuh>
 #include <hipcub/hipcub.hpp>
 #include <hipcub/block/block_reduce.hpp>
+#include <rocprim/warp/warp_reduce.hpp>
 #endif
 
 namespace gsplat {

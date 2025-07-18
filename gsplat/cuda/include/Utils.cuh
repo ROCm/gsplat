@@ -6,7 +6,9 @@
 #include <cooperative_groups/reduce.h>
 #else
 #include <hip/hip_cooperative_groups.h>
-#endif  
+#include <rocprim/warp/warp_reduce.hpp>
+#include <rocprim/functional.hpp> 
+#endif
 
 namespace gsplat {
 
@@ -153,55 +155,23 @@ inline __device__ int get_leader_lane_id(unsigned long long mask) {
 // These are provided for comparison if cooperative_groups::labeled_partition and cg::reduce is not available
 // or for specific performance tuning, though `labeled_partition` is generally efficient.
 
-inline __device__ int32_t reduce_max(cg::thread_group g, int32_t* temp_base, int32_t val, uint32_t meta_group_rank)  
-{   
-    // Rank of this thread in the group
-    const unsigned int group_thread_id = g.thread_rank();
-    const uint32_t tile_size = g.size();
+inline __device__ int32_t reduce_max_shuffle(int32_t val) {
+    const unsigned long long mask = 0xFFFFFFFFFFFFFFFFULL;
 
-    // Each tile gets its own private slice of the shared memory array. 
-    // temp_base points to the start of the entire reduction space and meta_group_rank is the unique ID of this tile within the block
-    int32_t* temp = temp_base + meta_group_rank * tile_size;
-    
-    // We start with half the group size as active threads  
-    // Every iteration the number of active threads halves, until we processed all values
-    for(unsigned int i = tile_size / 2; i > 0; i /= 2)  
-    {  
-        // Store value for this thread in a shared, temporary array
-        temp[group_thread_id] = val;
-        
-        // Synchronize all threads in the group 
-        g.sync();
-
-        // If our thread is still active, find max with its counterpart in the other half
-        if(group_thread_id < i)  
-        {  
-            val = max(val, temp[group_thread_id + i]);
-        }
-
-        // Synchronize all threads in the group
-        g.sync();  
+    #pragma unroll
+    for (int offset = 32; offset > 0; offset /= 2) {
+        val = max(val, __shfl_down_sync(mask, val, offset));
     }
     
-    // Store final result in shared memory and broadcast it
-    if (group_thread_id == 0) {  
-        temp[0] = val;
-    }
-
-    g.sync();
-
-    // All threads read the result from shared memory
-    return temp[0];
+    // Broadcast result from thread 0 to all threads in the group
+    return __shfl_sync(mask, val, 0);
 }
 
-inline __device__ void manual_warpSum(float& val, const cg::thread_group& warp) {  
-    // Get thread ID within warp  
-    unsigned int lane = warp.thread_rank();
-    //unsigned long long warp_mask = 0xFFFFFFFFFFFFFFFFULL; 
+inline __device__ void manual_warpSum(float& val) {  
     unsigned long long warp_mask = __activemask();
       
     // Perform warp-level sum  
-    for (int offset = warp.size() / 2; offset > 0; offset /= 2) {  
+    for (int offset = 32 ; offset > 0; offset /= 2) {  
         float other = __shfl_down_sync(warp_mask, val, offset);  
         val += other;  
     }  
@@ -211,26 +181,26 @@ inline __device__ void manual_warpSum(float& val, const cg::thread_group& warp) 
 }  
   
 // For vec2 type  
-inline __device__ void manual_warpSum(vec2& v, const cg::thread_group& warp) {  
+inline __device__ void manual_warpSum(vec2& v) {  
     float x = v.x;  
     float y = v.y;  
       
-    manual_warpSum(x, warp);  
-    manual_warpSum(y, warp);
+    manual_warpSum(x);  
+    manual_warpSum(y);
       
     v.x = x;  
     v.y = y;  
 }  
   
 // For vec3 type  
-inline __device__ void manual_warpSum(vec3& v, const cg::thread_group& warp) {  
+inline __device__ void manual_warpSum(vec3& v) {  
     float x = v.x;  
     float y = v.y;  
     float z = v.z;  
       
-    manual_warpSum(x, warp);  
-    manual_warpSum(y, warp);  
-    manual_warpSum(z, warp);  
+    manual_warpSum(x);  
+    manual_warpSum(y);  
+    manual_warpSum(z);  
       
     v.x = x;  
     v.y = y;  
@@ -238,16 +208,16 @@ inline __device__ void manual_warpSum(vec3& v, const cg::thread_group& warp) {
 }
 
 // For vec4 type  
-inline __device__ void manual_warpSum(vec4& v, const cg::thread_group& warp) {  
+inline __device__ void manual_warpSum(vec4& v) {  
     float x = v.x;  
     float y = v.y;  
     float z = v.z;
     float w = v.w;  
       
-    manual_warpSum(x, warp);  
-    manual_warpSum(y, warp);  
-    manual_warpSum(z, warp); 
-    manual_warpSum(w, warp); 
+    manual_warpSum(x);  
+    manual_warpSum(y);  
+    manual_warpSum(z); 
+    manual_warpSum(w); 
       
     v.x = x;  
     v.y = y;  
@@ -257,10 +227,80 @@ inline __device__ void manual_warpSum(vec4& v, const cg::thread_group& warp) {
   
 // For array type (like v_rgb_local)  
 template <int N>  
-inline __device__ void manual_warpSum(float val[N], const cg::thread_group& warp) {  
+inline __device__ void manual_warpSum(float val[N]) {  
     for (int i = 0; i < N; i++) {  
-        manual_warpSum(val[i], warp);  
+        manual_warpSum(val[i]);  
     }  
+}
+
+template<int LOGICAL_WARP_SIZE = 64>
+__device__ inline void rocprim_warpSum_scalar(float& val, typename rocprim::warp_reduce<float,LOGICAL_WARP_SIZE>::storage_type*
+            warp_storage_base)
+{
+    using warp_reduce_t = rocprim::warp_reduce<float, LOGICAL_WARP_SIZE>;
+    //constexpr int NUM_WARPS = BLOCK_SIZE / LOGICAL_WARP_SIZE;
+
+    // One storage object per logical warp inside the block
+    // __shared__ typename warp_reduce_t::storage_type
+    //     warp_storage[NUM_WARPS];
+
+    const int warp_id = threadIdx.x / LOGICAL_WARP_SIZE;
+    warp_reduce_t wreduce;
+    float sum;
+    wreduce.reduce(val,                       
+                   sum,
+                   warp_storage_base[warp_id],    
+                   rocprim::plus<float>());
+    val = sum;
+}
+
+//-----------------------------------------------------------------------------
+//  1. float overload  ────────────────────────────────────────────────────────
+template<int LOGICAL_WARP_SIZE = 64>
+__device__ inline void rocprim_warpSum(float& x, typename rocprim::warp_reduce<float,LOGICAL_WARP_SIZE>::storage_type*
+                    warp_storage_base)
+{
+    rocprim_warpSum_scalar<LOGICAL_WARP_SIZE>(x, warp_storage_base);
+}
+
+//-----------------------------------------------------------------------------
+//  2. vec2 / vec3 / vec4 overloads  ─────────────────────────────────────────-
+template<int LOGICAL_WARP_SIZE = 64>
+__device__ inline void rocprim_warpSum(vec2& v, typename rocprim::warp_reduce<float,LOGICAL_WARP_SIZE>::storage_type*
+                    warp_storage_base)
+{
+    rocprim_warpSum_scalar<LOGICAL_WARP_SIZE>(v.x, warp_storage_base);
+    rocprim_warpSum_scalar<LOGICAL_WARP_SIZE>(v.y, warp_storage_base);
+}
+
+template<int LOGICAL_WARP_SIZE = 64>
+__device__ inline void rocprim_warpSum(vec3& v, typename rocprim::warp_reduce<float,LOGICAL_WARP_SIZE>::storage_type*
+                    warp_storage_base)
+{
+    rocprim_warpSum_scalar<LOGICAL_WARP_SIZE>(v.x, warp_storage_base);
+    rocprim_warpSum_scalar<LOGICAL_WARP_SIZE>(v.y, warp_storage_base);
+    rocprim_warpSum_scalar<LOGICAL_WARP_SIZE>(v.z, warp_storage_base);
+}
+
+template<int LOGICAL_WARP_SIZE = 64>
+__device__ inline void rocprim_warpSum(vec4& v, typename rocprim::warp_reduce<float,LOGICAL_WARP_SIZE>::storage_type*
+                    warp_storage_base)
+{
+    rocprim_warpSum_scalar<LOGICAL_WARP_SIZE>(v.x, warp_storage_base);
+    rocprim_warpSum_scalar<LOGICAL_WARP_SIZE>(v.y, warp_storage_base);
+    rocprim_warpSum_scalar<LOGICAL_WARP_SIZE>(v.z, warp_storage_base);
+    rocprim_warpSum_scalar<LOGICAL_WARP_SIZE>(v.w, warp_storage_base);
+}
+
+//-----------------------------------------------------------------------------
+//  3. fixed-size float array overload  ───────────────────────────────────────
+template<int N, int LOGICAL_WARP_SIZE = 64>
+__device__ inline void rocprim_warpSum(float (&a)[N], typename rocprim::warp_reduce<float,LOGICAL_WARP_SIZE>::storage_type*
+                    warp_storage_base)
+{
+    #pragma unroll
+    for (int i = 0; i < N; ++i)
+        rocprim_warpSum_scalar<LOGICAL_WARP_SIZE>(a[i], warp_storage_base);
 }
 
 inline __device__ void manual_dynamic_reduce_sum_vec2(  
