@@ -177,6 +177,13 @@ __global__ void rasterize_to_pixels_2dgs_bwd_kernel(
     // extended memory block
     float *rgbs_batch = (float *)&w_Ms_batch[block_size]; // [block_size * CDIM]
     float *normals_batch = &rgbs_batch[block_size * CDIM]; // [block_size * 3]
+    
+    #if USE_ROCM
+    using warp_reduce_float_t = rocprim::warp_reduce<float,64>;
+    auto* warp_storage_base   =
+    (typename warp_reduce_float_t::storage_type*)
+        (normals_batch + block_size * 3);
+    #endif
 
     // this is the T AFTER the last gaussian in this pixel
     float T_final = 1.0f - render_alphas[pix_id];
@@ -627,16 +634,16 @@ __global__ void rasterize_to_pixels_2dgs_bwd_kernel(
              * ==================================================
              */
             #if USE_ROCM
-            manual_warpSum<CDIM>(v_rgb_local);
-            manual_warpSum<3>(v_normal_local);
-            manual_warpSum(v_xy_local);
-            manual_warpSum(v_u_M_local);
-            manual_warpSum(v_v_M_local);
-            manual_warpSum(v_w_M_local);
+            rocprim_warpSum<CDIM, 64>(v_rgb_local, warp_storage_base);   // CDIM-sized float array
+            rocprim_warpSum<3, 64>(v_normal_local, warp_storage_base);   // 3-sized float array
+            rocprim_warpSum<64>(v_xy_local, warp_storage_base);          // vec2
+            rocprim_warpSum<64>(v_u_M_local, warp_storage_base);         // float
+            rocprim_warpSum<64>(v_v_M_local, warp_storage_base);         // float
+            rocprim_warpSum<64>(v_w_M_local, warp_storage_base);         // float
             if (v_means2d_abs != nullptr) {
-                manual_warpSum(v_xy_abs_local);
+                rocprim_warpSum<64>(v_xy_abs_local, warp_storage_base);  // vec2
             }
-            manual_warpSum(v_opacity_local);
+            rocprim_warpSum<64>(v_opacity_local, warp_storage_base);     // float
             #else
             warpSum<CDIM>(v_rgb_local, warp);
             warpSum<3>(v_normal_local, warp);
@@ -757,10 +764,17 @@ void launch_rasterize_to_pixels_2dgs_bwd_kernel(
     dim3 threads = {tile_size, tile_size, 1};
     dim3 grid = {I, tile_height, tile_width};
 
+    //rocPRIM shared memory allocation
+    const uint32_t block_size = tile_size * tile_size;
+    const uint32_t warps_per_block =
+        (block_size + 63) / 64;                       // for 64-lane warp
+    std::size_t warp_scratch_bytes =
+        warps_per_block * sizeof(typename rocprim::warp_reduce<float,64>::storage_type);
+
     int64_t shmem_size =
         tile_size * tile_size *
         (sizeof(int32_t) + sizeof(vec3) + sizeof(vec3) + sizeof(vec3) +
-         sizeof(vec3) + sizeof(float) * CDIM + sizeof(float) * 3);
+         sizeof(vec3) + sizeof(float) * CDIM + sizeof(float) * 3) + warp_scratch_bytes;
 
     if (n_isects == 0) {
         // skip the kernel launch if there are no elements
