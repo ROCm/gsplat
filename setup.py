@@ -17,8 +17,8 @@ exec(open("gsplat/version.py", "r").read())
 URL = "https://github.com/AMD-AIOSS/gsplat"
 
 BUILD_NO_CUDA = os.getenv("BUILD_NO_CUDA", "0") == "1"
-WITH_SYMBOLS =  "1" #os.getenv("WITH_SYMBOLS", "0") == "1"
-LINE_INFO = "1" #os.getenv("LINE_INFO", "0") == "1"
+WITH_SYMBOLS =  os.getenv("WITH_SYMBOLS", "0") == "1"
+LINE_INFO = os.getenv("LINE_INFO", "0") == "1"
 MAX_JOBS = os.getenv("MAX_JOBS")
 need_to_unset_max_jobs = False
 if not MAX_JOBS:
@@ -67,17 +67,14 @@ def get_extensions():
         if WITH_SYMBOLS:
             hipcc_flags += ["-g", "-ggdb" , "-O0"]
         else:
-            hipcc_flags += ["-O3"]
-    nvcc_flags = os.getenv("NVCC_FLAGS", "")
-    nvcc_flags = [] if nvcc_flags == "" else nvcc_flags.split(" ")
-    nvcc_flags += ["-g", "-G", "--use_fast_math", "-std=c++17"]
-    if LINE_INFO:
-        nvcc_flags += ["-lineinfo"]
-    if torch.version.hip:
-        # USE_ROCM was added to later versions of PyTorch.
-        # Define here to support older PyTorch versions as well:
-        define_macros += [("USE_ROCM", "1")]
-        undef_macros += ["__HIP_NO_HALF_CONVERSIONS__"]
+            hipcc_flags += ["-O3" ]
+        if LINE_INFO:
+            hipcc_flags += ["-gline-tables-only"]
+        if torch.version.hip:
+            # USE_ROCM was added to later versions of PyTorch.
+            # Define here to support older PyTorch versions as well:
+            define_macros += [("USE_ROCM", "1")]
+            undef_macros += ["__HIP_NO_HALF_CONVERSIONS__"]
 
         # Its still nvcc flags that are used for HIP compilation
         extra_compile_args["nvcc"] = hipcc_flags
