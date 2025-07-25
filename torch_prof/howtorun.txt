@@ -1,0 +1,90 @@
+ Step 1: Inject Profiler into Test Files
+
+  cd /home/AMD/chanshar/workspace/gsplat
+  python torch_prof/profile_tests.py --inject-profiler
+
+  Step 2: Profile All Tests (Skipping Compression)
+
+  # Profile all tests except the failing compression test
+  ENABLE_PROFILER=1 CUDA_VISIBLE_DEVICES=0 python torch_prof/profile_tests.py --tests test_basic.py test_rasterization.py test_2dgs.py test_strategy.py
+
+  Step 3: Profile Individual Kernels
+
+  # Profile individual CUDA/HIP kernels
+  CUDA_VISIBLE_DEVICES=0 python torch_prof/profile_kernels.py
+
+  Step 4: Profile Main Benchmark Script
+
+  # Profile the main.py benchmark
+  CUDA_VISIBLE_DEVICES=0 python torch_prof/profile_tests.py --include-main --tests test_basic.py
+
+  Step 5: Run Specific Tests with Profiling
+
+  # Example: Profile a specific test
+  ENABLE_PROFILER=1 CUDA_VISIBLE_DEVICES=0 pytest -v -s tests/test_rasterization.py::test_rasterization
+
+  # Or profile all rasterization tests
+  ENABLE_PROFILER=1 CUDA_VISIBLE_DEVICES=0 pytest -v -s tests/test_rasterization.py -k "not compression"
+
+  Step 6: View Results
+
+  Since TensorBoard has issues with NumPy 2.0, use alternative methods:
+
+  # Option 1: Use the custom viewer
+  python torch_prof/view_pytorch_trace.py torch_prof/logs/tests/
+
+  # Option 2: View specific test results
+  python torch_prof/view_results.py logs/test_rasterize_to_pixels_batch_dims2_128_
+
+  # Option 3: List all generated traces
+  find . -name "*.pt.trace.json" -type f | head -20
+
+  # Option 4: Check the summary
+  cat torch_prof/profiling_summary.json
+
+  Complete Example Run
+
+  Here's a complete workflow:
+
+  # 1. Go to gsplat directory
+  cd /home/AMD/chanshar/workspace/gsplat
+
+  # 2. Clean previous results (optional)
+  rm -rf torch_prof/logs/* logs/*
+
+  # 3. Inject profiler (only needed once)
+  python torch_prof/profile_tests.py --inject-profiler
+
+  # 4. Profile all tests (excluding compression)
+  ENABLE_PROFILER=1 CUDA_VISIBLE_DEVICES=0 python torch_prof/profile_tests.py --tests
+  test_basic.py test_rasterization.py test_2dgs.py test_strategy.py
+
+  # 5. Profile kernels
+  CUDA_VISIBLE_DEVICES=0 python torch_prof/profile_kernels.py
+
+  # 6. Check what was profiled
+  ls -la torch_prof/logs/tests/
+  ls -la torch_prof/logs/kernels/
+
+  # 7. View summary
+  cat torch_prof/profiling_summary.json | python -m json.tool
+
+  Skip Compression Tests in pytest
+
+  If you want to run pytest directly and skip compression tests:
+
+  # Skip tests containing "compression" in their name
+  ENABLE_PROFILER=1 CUDA_VISIBLE_DEVICES=0 pytest -v -s tests/ -k "not compression"
+
+  # Or mark compression tests to skip
+  ENABLE_PROFILER=1 CUDA_VISIBLE_DEVICES=0 pytest -v -s tests/
+  --ignore=tests/test_compression.py
+
+  This will profile all the CUDA/HIP kernels and test functions while skipping the
+  failing compression test.
+
+
+
+
+   # Use the profile_tests.py script
+  CUDA_VISIBLE_DEVICES=0 python torch_prof/profile_tests.py --tests test_basic.py --specific-test "test_rasterize_to_pixels[batch_dims2-128]"
