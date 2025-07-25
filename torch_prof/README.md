@@ -65,10 +65,10 @@ CUDA_VISIBLE_DEVICES=0 python torch_prof/profile_tests.py --tests test_basic.py 
 
 ```bash
 # Without profiling (normal benchmark)
-CUDA_VISIBLE_DEVICES=0 python profiling/main.py --batch_size 8 --scene_grid 21 --channels 32
+CUDA_VISIBLE_DEVICES=0 python profiling/main.py --batch_size 8 --scene_grid 21 --channels 32 --resolution 720p
 
 # With profiling enabled
-ENABLE_PROFILER=1 CUDA_VISIBLE_DEVICES=0 python profiling/main.py --batch_size 8 --scene_grid 21 --channels 32 --repeats 5
+ENABLE_PROFILER=1 CUDA_VISIBLE_DEVICES=0 python profiling/main.py --batch_size 8 --scene_grid 21 --channels 32 --repeats 5 --resolution 4k
 ```
 
 ### Profile Individual Kernels
