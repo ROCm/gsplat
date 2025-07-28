@@ -23,7 +23,7 @@ def profile_test_with_torch(request):
     An autouse fixture that profiles each test function using torch.profiler.
 
     Profiling is only enabled if the environment variable ENABLE_PROFILER is set to "1".
-    The output trace is saved in a 'logs/' directory, with a subdirectory named
+    The output trace is saved in a 'torch_prof/logs/tests/' directory, with a subdirectory named
     after the specific test being run.
     """
     # Check if the profiler is enabled via environment variable
@@ -41,7 +41,7 @@ def profile_test_with_torch(request):
     if torch.cuda.is_available():
         activities.append(torch.profiler.ProfilerActivity.CUDA)
 
-    log_dir = f"./logs/{sanitized_node_id}"
+    log_dir = f"./torch_prof/logs/tests/{sanitized_node_id}"
     print(f"\n[Profiler] Enabled for {node_id}.")
     print(f"[Profiler] Trace will be saved to '{log_dir}'")
 
