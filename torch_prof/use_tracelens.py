@@ -34,7 +34,7 @@ def generate_tracelens_report(trace_file, output_dir="torch_prof/tracelens_repor
     output_file = os.path.join(output_dir, f"{trace_name}.xlsx")
     
     # TraceLens path
-    tracelens_path = "/home/AMD/chanshar/workspace/TraceLens-main/examples"
+    tracelens_path = "./TraceLens-main/examples"
     tracelens_script = os.path.join(tracelens_path, "generate_perf_report.py")
     
     if not os.path.exists(tracelens_script):
