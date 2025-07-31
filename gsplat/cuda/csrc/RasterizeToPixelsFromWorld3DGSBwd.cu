@@ -179,6 +179,13 @@ __global__ void rasterize_to_pixels_from_world_3dgs_bwd_kernel(
         reinterpret_cast<vec4 *>(&scale_batch[block_size]); // [block_size]
     float *rgbs_batch =
         (float *)&quat_batch[block_size]; // [block_size * CDIM]
+        
+    #if USE_ROCM
+    using warp_reduce_float_t = rocprim::warp_reduce<float,64>;
+    auto* warp_storage_base   =
+    (typename warp_reduce_float_t::storage_type*)
+        (rgbs_batch + block_size * CDIM);
+    #endif
 
     // this is the T AFTER the last gaussian in this pixel
     float T_final = 1.0f - render_alphas[pix_id];
@@ -360,11 +367,11 @@ __global__ void rasterize_to_pixels_from_world_3dgs_bwd_kernel(
                 }
             }
             #if USE_ROCM
-            manual_warpSum<CDIM>(v_rgb_local);
-            manual_warpSum(v_mean_local);
-            manual_warpSum(v_scale_local);
-            manual_warpSum(v_quat_local);
-            manual_warpSum(v_opacity_local);
+            rocprim_warpSum<CDIM, 64>(v_rgb_local, warp_storage_base);   // CDIM-sized float array
+            rocprim_warpSum<64>(v_mean_local, warp_storage_base);        // vec3
+            rocprim_warpSum<64>(v_scale_local, warp_storage_base);       // vec3
+            rocprim_warpSum<64>(v_quat_local, warp_storage_base);        // vec4
+            rocprim_warpSum<64>(v_opacity_local, warp_storage_base);     // float
             #else
             warpSum<CDIM>(v_rgb_local, warp);
             warpSum(v_mean_local, warp);
@@ -462,9 +469,16 @@ void launch_rasterize_to_pixels_from_world_3dgs_bwd_kernel(
     dim3 threads = {tile_size, tile_size, 1};
     dim3 grid = {I, tile_height, tile_width};
 
+    //rocPRIM shared memory allocation
+    const uint32_t block_size = tile_size * tile_size;
+    const uint32_t warps_per_block =
+        (block_size + 63) / 64;                       // for 64-lane warp
+    std::size_t warp_scratch_bytes =
+        warps_per_block * sizeof(typename rocprim::warp_reduce<float,64>::storage_type);
+
     int64_t shmem_size =
         tile_size * tile_size *
-        (sizeof(int32_t) + sizeof(vec4) + sizeof(vec3) + sizeof(vec4) + sizeof(float) * CDIM);
+        (sizeof(int32_t) + sizeof(vec4) + sizeof(vec3) + sizeof(vec4) + sizeof(float) * CDIM) + warp_scratch_bytes;
 
     if (n_isects == 0) {
         // skip the kernel launch if there are no elements
