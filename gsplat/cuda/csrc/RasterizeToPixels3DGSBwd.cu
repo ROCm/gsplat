@@ -50,7 +50,8 @@ __global__ void rasterize_to_pixels_3dgs_bwd_kernel(
     vec2 *__restrict__ v_means2d,      // [..., N, 2] or [nnz, 2]
     vec3 *__restrict__ v_conics,       // [..., N, 3] or [nnz, 3]
     scalar_t *__restrict__ v_colors,   // [..., N, CDIM] or [nnz, CDIM]
-    scalar_t *__restrict__ v_opacities // [..., N] or [nnz]
+    scalar_t *__restrict__ v_opacities, // [..., N] or [nnz]
+    const uint32_t max_batch_size
 ) {
     auto block = cg::this_thread_block();
     uint32_t image_id = block.group_index().x;
@@ -95,23 +96,31 @@ __global__ void rasterize_to_pixels_3dgs_bwd_kernel(
             ? n_isects
             : tile_offsets[tile_id + 1];
     const uint32_t block_size = block.size();
+
+#if USE_ROCM
+    const uint32_t batch_allocation_size = max_batch_size;
+    const uint32_t num_batches =
+        (range_end - range_start + max_batch_size - 1) / max_batch_size;
+#else
+    const uint32_t batch_allocation_size = block_size;
     const uint32_t num_batches =
         (range_end - range_start + block_size - 1) / block_size;
+#endif
 
     extern __shared__ int s[];
-    int32_t *id_batch = (int32_t *)s; // [block_size]
+    int32_t *id_batch = (int32_t *)s; // [batch_allocation_size]
     vec3 *xy_opacity_batch =
-        reinterpret_cast<vec3 *>(&id_batch[block_size]); // [block_size]
+        reinterpret_cast<vec3 *>(&id_batch[batch_allocation_size]); // [batch_allocation_size]
     vec3 *conic_batch =
-        reinterpret_cast<vec3 *>(&xy_opacity_batch[block_size]); // [block_size]
+        reinterpret_cast<vec3 *>(&xy_opacity_batch[batch_allocation_size]); // [batch_allocation_size]
     float *rgbs_batch =
-        (float *)&conic_batch[block_size]; // [block_size * CDIM]
+        (float *)&conic_batch[batch_allocation_size]; // [batch_allocation_size * CDIM]
     
     #if USE_ROCM
     using warp_reduce_float_t = rocprim::warp_reduce<float,64>;
     auto* warp_storage_base   =
     (typename warp_reduce_float_t::storage_type*)
-        (rgbs_batch + block_size * CDIM);
+        (rgbs_batch + batch_allocation_size * CDIM);
     #endif
 
     // this is the T AFTER the last gaussian in this pixel
@@ -161,10 +170,17 @@ __global__ void rasterize_to_pixels_3dgs_bwd_kernel(
         // index of gaussian to load
         // batch end is the index of the last gaussian in the batch
         // These values can be negative so must be int32 instead of uint32
+#if USE_ROCM
+        const int32_t batch_end = range_end - 1 - max_batch_size * b;
+        const int32_t current_batch_size = min(max_batch_size, batch_end + 1 - range_start);
+        const int32_t idx = batch_end - tr;
+        if (tr < current_batch_size && idx >= range_start) {
+#else
         const int32_t batch_end = range_end - 1 - block_size * b;
         const int32_t batch_size = min(block_size, batch_end + 1 - range_start);
         const int32_t idx = batch_end - tr;
         if (idx >= range_start) {
+#endif
             int32_t g = flatten_ids[idx]; // flatten index in [I * N] or [nnz]
             id_batch[tr] = g;
             const vec2 xy = means2d[g];
@@ -180,8 +196,11 @@ __global__ void rasterize_to_pixels_3dgs_bwd_kernel(
         block.sync();
         // process gaussians in the current batch for this pixel
         // 0 index is the furthest back gaussian in the batch
-        for (uint32_t t = max(0, batch_end - warp_bin_final); t < batch_size;
-             ++t) {
+#if USE_ROCM
+        for (uint32_t t = max(0, batch_end - warp_bin_final); t < current_batch_size; ++t) {
+#else
+        for (uint32_t t = max(0, batch_end - warp_bin_final); t < batch_size; ++t) {
+#endif
             bool valid = inside;
             if (batch_end - t > bin_final) {
                 valid = 0;
@@ -380,21 +399,28 @@ void launch_rasterize_to_pixels_3dgs_bwd_kernel(
     dim3 threads = {tile_size, tile_size, 1};
     dim3 grid = {I, tile_height, tile_width};
 
-    // int64_t shmem_size =
-    //     tile_size * tile_size *
-    //     (sizeof(int32_t) + sizeof(vec3) + sizeof(vec3) + sizeof(float) * CDIM);
-
-    //rocPRIM shared memory allocation
+#if USE_ROCM
+    // Optimization for ROCm: Use smaller batch size to reduce shared memory usage
+    uint32_t max_batch_size = 16;
     const uint32_t block_size = tile_size * tile_size;
-    const uint32_t warps_per_block =
-        (block_size + 63) / 64;                       // for 64-lane warp
+    max_batch_size = min(max_batch_size, block_size);
+    if (CDIM <= 32) {
+        max_batch_size = block_size;
+    }
+
+    const uint32_t warps_per_block = (block_size + 63) / 64; // for 64-lane warp
     std::size_t warp_scratch_bytes =
         warps_per_block * sizeof(typename rocprim::warp_reduce<float,64>::storage_type);
 
-
+    int64_t shmem_size =
+        max_batch_size *
+        (sizeof(int32_t) + sizeof(vec3) + sizeof(vec3) + sizeof(float) * CDIM) + warp_scratch_bytes;
+#else
+    // Original CUDA implementation
     int64_t shmem_size =
         tile_size * tile_size *
-        (sizeof(int32_t) + sizeof(vec3) + sizeof(vec3) + sizeof(float) * CDIM) + warp_scratch_bytes ;
+        (sizeof(int32_t) + sizeof(vec3) + sizeof(vec3) + sizeof(float) * CDIM);
+#endif
 
     if (n_isects == 0) {
         // skip the kernel launch if there are no elements
@@ -462,7 +488,8 @@ void launch_rasterize_to_pixels_3dgs_bwd_kernel(
             reinterpret_cast<vec2 *>(v_means2d.data_ptr<float>()),
             reinterpret_cast<vec3 *>(v_conics.data_ptr<float>()),
             v_colors.data_ptr<float>(),
-            v_opacities.data_ptr<float>()
+            v_opacities.data_ptr<float>(),
+            max_batch_size
         );
 }
 
