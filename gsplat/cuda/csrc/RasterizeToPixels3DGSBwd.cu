@@ -65,9 +65,7 @@ __device__ T dpp_warpMax(T &val) {
 }
 
 template <uint32_t CDIM, typename scalar_t>
-#if USE_ROCM
 __launch_bounds__(64)
-#endif
 __global__ void rasterize_bs64_to_pixels_3dgs_bwd_kernel(
     const uint32_t I,
     const uint32_t N,
@@ -148,15 +146,9 @@ __global__ void rasterize_bs64_to_pixels_3dgs_bwd_kernel(
             : tile_offsets[tile_id + 1];
     const uint32_t block_size = block.size();
 
-#if USE_ROCM
     const uint32_t batch_allocation_size = max_batch_size;
     const uint32_t num_batches =
         (range_end - range_start + max_batch_size - 1) / max_batch_size;
-#else
-    const uint32_t batch_allocation_size = block_size;
-    const uint32_t num_batches =
-        (range_end - range_start + block_size - 1) / block_size;
-#endif
 
     extern __shared__ int s[];
     int32_t *id_batch = (int32_t *)s; // [batch_allocation_size]
@@ -164,13 +156,8 @@ __global__ void rasterize_bs64_to_pixels_3dgs_bwd_kernel(
         reinterpret_cast<vec3 *>(&id_batch[batch_allocation_size]); // [batch_allocation_size]
     vec3 *conic_batch =
         reinterpret_cast<vec3 *>(&xy_opacity_batch[batch_allocation_size]); // [batch_allocation_size]
-    #if USE_ROCM
     float *rgbs_batch =
         (float *)s; // [batch_allocation_size * CDIM]
-    #else
-    float *rgbs_batch =
-        (float *)&conic_batch[batch_allocation_size]; // [batch_allocation_size * CDIM]
-    #endif
 
     // this is the T AFTER the last gaussian in this pixel
     float T_final = 1.0f - render_alphas[pix_id];
@@ -192,19 +179,10 @@ __global__ void rasterize_bs64_to_pixels_3dgs_bwd_kernel(
     // each thread loads one gaussian at a time before rasterizing
     const uint32_t tr = block.thread_rank();
 
-    #if USE_ROCM
     cg::thread_block_tile<64> warp = cg::tiled_partition<64>(block);
-    #else
-    cg::thread_block_tile<32> warp = cg::tiled_partition<32>(block);
-    #endif
 
-    #if USE_ROCM
     int32_t warp_bin_final =
-        dpp_warpMax(bin_final);
-    #else
-    const int32_t warp_bin_final =
-        cg::reduce(warp, bin_final, cg::greater<int>());
-    #endif
+    dpp_warpMax(bin_final);
     int32_t _id_batch;
     vec3 _xy_opacity_batch;
     vec3 _conic_batch;
@@ -217,31 +195,16 @@ __global__ void rasterize_bs64_to_pixels_3dgs_bwd_kernel(
         // index of gaussian to load
         // batch end is the index of the last gaussian in the batch
         // These values can be negative so must be int32 instead of uint32
-#if USE_ROCM
         const int32_t batch_end = range_end - 1 - max_batch_size * b;
         const int32_t current_batch_size = min(max_batch_size, batch_end + 1 - range_start);
         const int32_t idx = batch_end - tr;
         if (tr < current_batch_size && idx >= range_start) {
-#else
-        const int32_t batch_end = range_end - 1 - block_size * b;
-        const int32_t batch_size = min(block_size, batch_end + 1 - range_start);
-        const int32_t idx = batch_end - tr;
-        if (idx >= range_start) {
-#endif
             int32_t g = flatten_ids[idx]; // flatten index in [I * N] or [nnz]
-#if USE_ROCM
             _id_batch = g;
             const vec2 xy = means2d[g];
             const float opac = opacities[g];
             _xy_opacity_batch = {xy.x, xy.y, opac};
             _conic_batch = conics[g];
-#else
-            id_batch[tr] = g;
-            const vec2 xy = means2d[g];
-            const float opac = opacities[g];
-            xy_opacity_batch[tr] = {xy.x, xy.y, opac};
-            conic_batch[tr] = conics[g];
-#endif
 #pragma unroll
             for (uint32_t k = 0; k < CDIM; ++k) {
                 rgbs_batch[tr * CDIM + k] = colors[g * CDIM + k];
@@ -251,11 +214,7 @@ __global__ void rasterize_bs64_to_pixels_3dgs_bwd_kernel(
         block.sync();
         // process gaussians in the current batch for this pixel
         // 0 index is the furthest back gaussian in the batch
-#if USE_ROCM
         for (uint32_t t = max(0, batch_end - warp_bin_final); t < current_batch_size; ++t) {
-#else
-        for (uint32_t t = max(0, batch_end - warp_bin_final); t < batch_size; ++t) {
-#endif
             bool valid = inside;
             if (batch_end - t > bin_final) {
                 valid = 0;
@@ -265,7 +224,6 @@ __global__ void rasterize_bs64_to_pixels_3dgs_bwd_kernel(
             vec2 delta;
             vec3 conic;
             float vis;
-#if USE_ROCM
             conic.x = __shfl(_conic_batch.x, t);
             conic.y = __shfl(_conic_batch.y, t);
             conic.z = __shfl(_conic_batch.z, t);
@@ -273,12 +231,7 @@ __global__ void rasterize_bs64_to_pixels_3dgs_bwd_kernel(
             xy_opac.x = __shfl(_xy_opacity_batch.x, t);
             xy_opac.y = __shfl(_xy_opacity_batch.y, t);
             xy_opac.z = __shfl(_xy_opacity_batch.z, t);
-#endif
             if (valid) {
-#if !USE_ROCM
-                conic = conic_batch[t];
-                vec3 xy_opac = xy_opacity_batch[t];
-#endif
                 opac = xy_opac.z;
                 delta = {xy_opac.x - px, xy_opac.y - py};
                 float sigma = 0.5f * (conic.x * delta.x * delta.x +
@@ -352,7 +305,6 @@ __global__ void rasterize_bs64_to_pixels_3dgs_bwd_kernel(
                     buffer[k] += rgbs_batch[t * CDIM + k] * fac;
                 }
             }
-            #if USE_ROCM
             dpp_vec_warpSum<CDIM>(v_rgb_local);   // CDIM-sized float array
             dpp_warpSum(v_conic_local); // float
             dpp_warpSum(v_xy_local);    // vec2
@@ -384,40 +336,6 @@ __global__ void rasterize_bs64_to_pixels_3dgs_bwd_kernel(
 
                 atomicAddNoRet(v_opacities + g, v_opacity_local);
             }
-            #else
-            warpSum<CDIM>(v_rgb_local, warp);
-            warpSum(v_conic_local, warp);
-            warpSum(v_xy_local, warp);
-            if (v_means2d_abs != nullptr) {
-                warpSum(v_xy_abs_local, warp);
-            }
-            warpSum(v_opacity_local, warp);
-            if (warp.thread_rank() == 0) {
-                int32_t g = id_batch[t]; // flatten index in [I * N] or [nnz]
-                float *v_rgb_ptr = (float *)(v_colors) + CDIM * g;
-#pragma unroll
-                for (uint32_t k = 0; k < CDIM; ++k) {
-                    gpuAtomicAdd(v_rgb_ptr + k, v_rgb_local[k]);
-                }
-
-                float *v_conic_ptr = (float *)(v_conics) + 3 * g;
-                gpuAtomicAdd(v_conic_ptr, v_conic_local.x);
-                gpuAtomicAdd(v_conic_ptr + 1, v_conic_local.y);
-                gpuAtomicAdd(v_conic_ptr + 2, v_conic_local.z);
-
-                float *v_xy_ptr = (float *)(v_means2d) + 2 * g;
-                gpuAtomicAdd(v_xy_ptr, v_xy_local.x);
-                gpuAtomicAdd(v_xy_ptr + 1, v_xy_local.y);
-
-                if (v_means2d_abs != nullptr) {
-                    float *v_xy_abs_ptr = (float *)(v_means2d_abs) + 2 * g;
-                    gpuAtomicAdd(v_xy_abs_ptr, v_xy_abs_local.x);
-                    gpuAtomicAdd(v_xy_abs_ptr + 1, v_xy_abs_local.y);
-                }
-
-                gpuAtomicAdd(v_opacities + g, v_opacity_local);
-            }
-            #endif
         }
     }
 }
