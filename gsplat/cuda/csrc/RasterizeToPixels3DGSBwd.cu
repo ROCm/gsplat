@@ -19,23 +19,38 @@ namespace cg = cooperative_groups;
 #if USE_ROCM
 template <typename T>
 __device__ void dpp_sclr_warpSum(T &val) {
-        T warp_bin_final;
-	warp_bin_final = val + __builtin_amdgcn_mov_dpp(val, 0x118, 0xf, 0xf, 0); //ROW_SHR8
-	warp_bin_final = warp_bin_final + __builtin_amdgcn_mov_dpp(warp_bin_final, 0x114, 0xf, 0xf, 0); //ROW_SHR4
-	warp_bin_final = warp_bin_final + __builtin_amdgcn_mov_dpp(warp_bin_final, 0x112, 0xf, 0xf, 0); //ROW_SHR2
-	warp_bin_final = warp_bin_final + __builtin_amdgcn_mov_dpp(warp_bin_final, 0x111, 0xf, 0xf, 0); //ROW_SHR1
-	warp_bin_final = warp_bin_final + __builtin_amdgcn_mov_dpp(warp_bin_final, 0x142, 0xf, 0xf, 0); //BCAST15
-	warp_bin_final = warp_bin_final + __builtin_amdgcn_mov_dpp(warp_bin_final, 0x143, 0xf, 0xf, 0); //BCAST31
-	val = __shfl(warp_bin_final, 63);
+	T tmp = val + __builtin_amdgcn_mov_dpp(val, 0x118, 0xf, 0xf, 0); //ROW_SHR8
+	tmp = tmp + __builtin_amdgcn_mov_dpp(tmp, 0x114, 0xf, 0xf, 0); //ROW_SHR4
+	tmp = tmp + __builtin_amdgcn_mov_dpp(tmp, 0x112, 0xf, 0xf, 0); //ROW_SHR2
+	tmp = tmp + __builtin_amdgcn_mov_dpp(tmp, 0x111, 0xf, 0xf, 0); //ROW_SHR1
+	tmp = tmp + __builtin_amdgcn_mov_dpp(tmp, 0x142, 0xf, 0xf, 0); //BCAST15
+	tmp = tmp + __builtin_amdgcn_mov_dpp(tmp, 0x143, 0xf, 0xf, 0); //BCAST31
+	val = __shfl(tmp, 63);
 }
 
+// This version does reduce but stores the result to a specific location (n_val) on a given lane (ln)
+// It can be sued to generate results than can be stored wave-coalesed.
+template <typename T>
+__device__ void dpp_sprd_warpSum(T &val, int ln, T &n_val) {
+	T tmp = val + __builtin_amdgcn_mov_dpp(val, 0x118, 0xf, 0xf, 0); //ROW_SHR8
+	tmp = tmp + __builtin_amdgcn_mov_dpp(tmp, 0x114, 0xf, 0xf, 0); //ROW_SHR4
+	tmp = tmp + __builtin_amdgcn_mov_dpp(tmp, 0x112, 0xf, 0xf, 0); //ROW_SHR2
+	tmp = tmp + __builtin_amdgcn_mov_dpp(tmp, 0x111, 0xf, 0xf, 0); //ROW_SHR1
+	tmp = tmp + __builtin_amdgcn_mov_dpp(tmp, 0x142, 0xf, 0xf, 0); //BCAST15
+	tmp = tmp + __builtin_amdgcn_mov_dpp(tmp, 0x143, 0xf, 0xf, 0); //BCAST31
+	tmp = __shfl(tmp, 63);
+	if (cg::this_thread_block().thread_rank() == ln)
+	       n_val = tmp;	
+}
+
+// Vector eltwise reduce, with results spread across lanes of the wave
 template <uint32_t numel, typename T>
 __device__ void dpp_vec_warpSum(T &val) {
           #pragma unroll
           for (int e=0; e<numel; e++)
-            dpp_sclr_warpSum(val[e]);
-	  // TODO: Handle vec with numel>1
+            dpp_sprd_warpSum(val[e], e%64, val[e/64]);
 }
+
 template <typename T>
 __device__ void dpp_warpSum(T &val) {
 	if constexpr(std::is_same<T, vec3>::value) {
@@ -53,15 +68,14 @@ __device__ void dpp_warpSum(T &val) {
 
 template <typename T>
 __device__ T dpp_warpMax(T &val) {
-        uint32_t warp_bin_final;
-	warp_bin_final = max(val, __builtin_amdgcn_mov_dpp(val, 0x118, 0xf, 0xf, 0)); //ROW_SHR8
-	warp_bin_final = max(warp_bin_final, __builtin_amdgcn_mov_dpp(warp_bin_final, 0x114, 0xf, 0xf, 0)); //ROW_SHR4
-	warp_bin_final = max(warp_bin_final, __builtin_amdgcn_mov_dpp(warp_bin_final, 0x112, 0xf, 0xf, 0)); //ROW_SHR2
-	warp_bin_final = max(warp_bin_final, __builtin_amdgcn_mov_dpp(warp_bin_final, 0x111, 0xf, 0xf, 0)); //ROW_SHR1
-	warp_bin_final = max(warp_bin_final, __builtin_amdgcn_mov_dpp(warp_bin_final, 0x142, 0xf, 0xf, 0)); //BCAST15
-	warp_bin_final = max(warp_bin_final, __builtin_amdgcn_mov_dpp(warp_bin_final, 0x143, 0xf, 0xf, 0)); //BCAST31
-	return __shfl(warp_bin_final, 63);
-
+	using ncT = std::remove_const<T>::type;
+	ncT tmp = max(val, __builtin_amdgcn_mov_dpp(val, 0x118, 0xf, 0xf, 0)); //ROW_SHR8
+	tmp = max(tmp, __builtin_amdgcn_mov_dpp(tmp, 0x114, 0xf, 0xf, 0)); //ROW_SHR4
+	tmp = max(tmp, __builtin_amdgcn_mov_dpp(tmp, 0x112, 0xf, 0xf, 0)); //ROW_SHR2
+	tmp = max(tmp, __builtin_amdgcn_mov_dpp(tmp, 0x111, 0xf, 0xf, 0)); //ROW_SHR1
+	tmp = max(tmp, __builtin_amdgcn_mov_dpp(tmp, 0x142, 0xf, 0xf, 0)); //BCAST15
+	tmp = max(tmp, __builtin_amdgcn_mov_dpp(tmp, 0x143, 0xf, 0xf, 0)); //BCAST31
+	return __shfl(tmp, 63);
 }
 
 template <uint32_t CDIM, typename scalar_t>
@@ -312,13 +326,15 @@ __global__ void rasterize_bs64_to_pixels_3dgs_bwd_kernel(
                 dpp_warpSum(v_xy_abs_local);// vec2
             dpp_warpSum(v_opacity_local);// float
 	    int32_t g = __shfl(_id_batch, t); // flatten index in [I * N] or [nnz]
-            if (warp.thread_rank() == 0) {
-                float *v_rgb_ptr = (float *)(v_colors) + CDIM * g;
-#pragma unroll
-                for (uint32_t k = 0; k < CDIM; ++k) {
-                    atomicAddNoRet(v_rgb_ptr + k, v_rgb_local[k]);
-                }
 
+            float *v_rgb_ptr = (float *)(v_colors) + CDIM * g;
+#pragma unroll
+            for (uint32_t k = 0; k < CDIM; k+=64) {
+		if (k + warp.thread_rank() < CDIM)
+                    atomicAddNoRet(v_rgb_ptr + k + warp.thread_rank(), v_rgb_local[k/64]);
+            }
+
+            if (warp.thread_rank() == 0) {
                 float *v_conic_ptr = (float *)(v_conics) + 3 * g;
                 atomicAddNoRet(v_conic_ptr, v_conic_local.x);
                 atomicAddNoRet(v_conic_ptr + 1, v_conic_local.y);
