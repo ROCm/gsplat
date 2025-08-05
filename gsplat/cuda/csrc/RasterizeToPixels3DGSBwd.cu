@@ -19,12 +19,12 @@ namespace cg = cooperative_groups;
 #if USE_ROCM
 template <typename T>
 __device__ void dpp_sclr_warpSum(T &val) {
-	T tmp = val + __builtin_amdgcn_mov_dpp(val, 0x118, 0xf, 0xf, 0); //ROW_SHR8
-	tmp = tmp + __builtin_amdgcn_mov_dpp(tmp, 0x114, 0xf, 0xf, 0); //ROW_SHR4
-	tmp = tmp + __builtin_amdgcn_mov_dpp(tmp, 0x112, 0xf, 0xf, 0); //ROW_SHR2
-	tmp = tmp + __builtin_amdgcn_mov_dpp(tmp, 0x111, 0xf, 0xf, 0); //ROW_SHR1
-	tmp = tmp + __builtin_amdgcn_mov_dpp(tmp, 0x142, 0xf, 0xf, 0); //BCAST15
-	tmp = tmp + __builtin_amdgcn_mov_dpp(tmp, 0x143, 0xf, 0xf, 0); //BCAST31
+	T tmp = val + __builtin_amdgcn_mov_dpp(val, 0x118, 0xf, 0xf, 1); //ROW_SHR8
+	tmp = tmp + __builtin_amdgcn_mov_dpp(tmp, 0x114, 0xf, 0xf, 1); //ROW_SHR4
+	tmp = tmp + __builtin_amdgcn_mov_dpp(tmp, 0x112, 0xf, 0xf, 1); //ROW_SHR2
+	tmp = tmp + __builtin_amdgcn_mov_dpp(tmp, 0x111, 0xf, 0xf, 1); //ROW_SHR1
+	tmp = tmp + __builtin_amdgcn_mov_dpp(tmp, 0x142, 0xf, 0xf, 1); //BCAST15
+	tmp = tmp + __builtin_amdgcn_mov_dpp(tmp, 0x143, 0xf, 0xf, 1); //BCAST31
 	val = __shfl(tmp, 63);
 }
 
@@ -32,12 +32,12 @@ __device__ void dpp_sclr_warpSum(T &val) {
 // It can be sued to generate results than can be stored wave-coalesed.
 template <typename T>
 __device__ void dpp_sprd_warpSum(T &val, int ln, T &n_val) {
-	T tmp = val + __builtin_amdgcn_mov_dpp(val, 0x118, 0xf, 0xf, 0); //ROW_SHR8
-	tmp = tmp + __builtin_amdgcn_mov_dpp(tmp, 0x114, 0xf, 0xf, 0); //ROW_SHR4
-	tmp = tmp + __builtin_amdgcn_mov_dpp(tmp, 0x112, 0xf, 0xf, 0); //ROW_SHR2
-	tmp = tmp + __builtin_amdgcn_mov_dpp(tmp, 0x111, 0xf, 0xf, 0); //ROW_SHR1
-	tmp = tmp + __builtin_amdgcn_mov_dpp(tmp, 0x142, 0xf, 0xf, 0); //BCAST15
-	tmp = tmp + __builtin_amdgcn_mov_dpp(tmp, 0x143, 0xf, 0xf, 0); //BCAST31
+	T tmp = val + __builtin_amdgcn_mov_dpp(val, 0x118, 0xf, 0xf, 1); //ROW_SHR8
+	tmp = tmp + __builtin_amdgcn_mov_dpp(tmp, 0x114, 0xf, 0xf, 1); //ROW_SHR4
+	tmp = tmp + __builtin_amdgcn_mov_dpp(tmp, 0x112, 0xf, 0xf, 1); //ROW_SHR2
+	tmp = tmp + __builtin_amdgcn_mov_dpp(tmp, 0x111, 0xf, 0xf, 1); //ROW_SHR1
+	tmp = tmp + __builtin_amdgcn_mov_dpp(tmp, 0x142, 0xf, 0xf, 1); //BCAST15
+	tmp = tmp + __builtin_amdgcn_mov_dpp(tmp, 0x143, 0xf, 0xf, 1); //BCAST31
 	tmp = __shfl(tmp, 63);
 	if (cg::this_thread_block().thread_rank() == ln)
 	       n_val = tmp;	
@@ -69,12 +69,12 @@ __device__ void dpp_warpSum(T &val) {
 template <typename T>
 __device__ T dpp_warpMax(T &val) {
 	using ncT = std::remove_const<T>::type;
-	ncT tmp = max(val, __builtin_amdgcn_mov_dpp(val, 0x118, 0xf, 0xf, 0)); //ROW_SHR8
-	tmp = max(tmp, __builtin_amdgcn_mov_dpp(tmp, 0x114, 0xf, 0xf, 0)); //ROW_SHR4
-	tmp = max(tmp, __builtin_amdgcn_mov_dpp(tmp, 0x112, 0xf, 0xf, 0)); //ROW_SHR2
-	tmp = max(tmp, __builtin_amdgcn_mov_dpp(tmp, 0x111, 0xf, 0xf, 0)); //ROW_SHR1
-	tmp = max(tmp, __builtin_amdgcn_mov_dpp(tmp, 0x142, 0xf, 0xf, 0)); //BCAST15
-	tmp = max(tmp, __builtin_amdgcn_mov_dpp(tmp, 0x143, 0xf, 0xf, 0)); //BCAST31
+	ncT tmp = max(val, __builtin_amdgcn_mov_dpp(val, 0x118, 0xf, 0xf, 1)); //ROW_SHR8
+	tmp = max(tmp, __builtin_amdgcn_mov_dpp(tmp, 0x114, 0xf, 0xf, 1)); //ROW_SHR4
+	tmp = max(tmp, __builtin_amdgcn_mov_dpp(tmp, 0x112, 0xf, 0xf, 1)); //ROW_SHR2
+	tmp = max(tmp, __builtin_amdgcn_mov_dpp(tmp, 0x111, 0xf, 0xf, 1)); //ROW_SHR1
+	tmp = max(tmp, __builtin_amdgcn_mov_dpp(tmp, 0x142, 0xf, 0xf, 1)); //BCAST15
+	tmp = max(tmp, __builtin_amdgcn_mov_dpp(tmp, 0x143, 0xf, 0xf, 1)); //BCAST31
 	return __shfl(tmp, 63);
 }
 
