@@ -1,92 +1,124 @@
-# gsplat
+# GSplat for ROCm
 
-[![Core Tests.](https://github.com/nerfstudio-project/gsplat/actions/workflows/core_tests.yml/badge.svg?branch=main)](https://github.com/nerfstudio-project/gsplat/actions/workflows/core_tests.yml)
-[![Docs](https://github.com/nerfstudio-project/gsplat/actions/workflows/doc.yml/badge.svg?branch=main)](https://github.com/nerfstudio-project/gsplat/actions/workflows/doc.yml)
+**GSplat** is an open-source library for GPU-accelerated rasterization of Gaussians with Python bindings. It is inspired by the SIGGRAPH paper [3D Gaussian Splatting for Real-Time Rendering of Radiance Fields](https://repo-sam.inria.fr/fungraph/3d-gaussian-splatting/).
 
-[http://www.gsplat.studio/](http://www.gsplat.studio/)
+This repository is the HIP port of the original `GSplat` project, optimized for **ROCm**, and designed to run on AMD Instinct™ GPUs. 
 
-gsplat is an open-source library for CUDA accelerated rasterization of gaussians with python bindings. It is inspired by the SIGGRAPH paper [3D Gaussian Splatting for Real-Time Rendering of Radiance Fields](https://repo-sam.inria.fr/fungraph/3d-gaussian-splatting/), but we’ve made gsplat even faster, more memory efficient, and with a growing list of new features! 
+## System Requirements
 
-<div align="center">
-  <video src="https://github.com/nerfstudio-project/gsplat/assets/10151885/64c2e9ca-a9a6-4c7e-8d6f-47eeacd15159" width="100%" />
-</div>
+To use GSplat, you need the following prerequisites:
 
-## News
-
-[May 2025] Arbitrary batching (over multiple scenes and multiple viewpoints) is supported now!! Checkout [here](docs/batch.md) for more details! Kudos to [Junchen Liu](https://junchenliu77.github.io/).
-
-[May 2025] [Jonathan Stephens](https://x.com/jonstephens85) makes a great [tutorial video](https://www.youtube.com/watch?v=ACPTiP98Pf8) for Windows users on how to install gsplat and get start with 3DGUT.
-
-[April 2025] [NVIDIA 3DGUT](https://research.nvidia.com/labs/toronto-ai/3DGUT/) is now integrated in gsplat! Checkout [here](docs/3dgut.md) for more details. [[NVIDIA Tech Blog]](https://developer.nvidia.com/blog/revolutionizing-neural-reconstruction-and-rendering-in-gsplat-with-3dgut/) [[NVIDIA Sweepstakes]](https://www.nvidia.com/en-us/research/3dgut-sweepstakes/)
+- **ROCm**: version 6.4.3 (recommended)
+- **Operating system**: Ubuntu 24.04  
+- **GPU platform**: AMD Instinct™ MI300X  
+- **PyTorch**: version 2.6 (ROCm-enabled)  
+- **Python**: version 3.12  
 
 ## Installation
 
-**Dependence**: Please install [Pytorch](https://pytorch.org/get-started/locally/) first.
+1. Install PyTorch (with ROCm support).  
+   The easiest method is using the official ROCm PyTorch Docker image:
 
-The easiest way is to install from PyPI. In this way it will build the CUDA code **on the first run** (JIT).
+   ```bash
+   docker pull rocm/pytorch:rocm6.4.3_ubuntu24.04_py3.12_pytorch_release_2.6.0
+   ```
 
-```bash
-pip install gsplat
-```
+2. Launch and connect to the container:
 
-Alternatively you can install gsplat from source. In this way it will build the CUDA code during installation.
+   ```bash
+   docker run --cap-add=SYS_PTRACE --ipc=host --privileged=true      --shm-size=128GB --network=host      --device=/dev/kfd --device=/dev/dri      --group-add video -it -v $HOME:$HOME      --name rocm_pytorch rocm/pytorch:rocm6.4.3_ubuntu24.04_py3.12_pytorch_release_2.6.0
+   ```
 
-```bash
-pip install git+https://github.com/nerfstudio-project/gsplat.git
-```
+3. Install GSplat from the AMD-hosted PyPI repository:
 
-We also provide [pre-compiled wheels](https://docs.gsplat.studio/whl) for both linux and windows on certain python-torch-CUDA combinations (please check first which versions are supported). Note this way you would have to manually install [gsplat's dependencies](https://github.com/nerfstudio-project/gsplat/blob/6022cf45a19ee307803aaf1f19d407befad2a033/setup.py#L115). For example, to install gsplat for pytorch 2.0 and cuda 11.8 you can run
-```
-pip install ninja numpy jaxtyping rich
-pip install gsplat --index-url https://docs.gsplat.studio/whl/pt20cu118
-```
+   ```bash
+   pip install gsplat --index-url=https://pypi.amd.com/simple
+   ```
 
-To build gsplat from source on Windows, please check [this instruction](docs/INSTALL_WIN.md).
+4. Verify the installation:
 
-## Evaluation
+   ```bash
+   pip show gsplat
+   ```
 
-This repo comes with a standalone script that reproduces the official Gaussian Splatting with exactly the same performance on PSNR, SSIM, LPIPS, and converged number of Gaussians. Powered by gsplat’s efficient CUDA implementation, the training takes up to **4x less GPU memory** with up to **15% less time** to finish than the official implementation. Full report can be found [here](https://docs.gsplat.studio/main/tests/eval.html).
+5. The output should show as follows:
 
-```bash
-cd examples
-pip install -r requirements.txt
-# download mipnerf_360 benchmark data
-python datasets/download_dataset.py
-# run batch evaluation
-bash benchmarks/basic.sh
-```
+   ```bash
+   Name: gsplat
+   Version: 1.5.3+4ae1c82
+   Summary: Python package for differentiable rasterization of Gaussians
+   Home-page: https://github.com/rocm/gsplat
+   Author: AMD Corporation
+   License: Apache 2.0
+   Location: /opt/conda/envs/py_3.12/lib/python3.12/site-packages
+   Requires: jaxtyping, ninja, numpy, rich, torch
+
 
 ## Examples
 
-We provide a set of examples to get you started! Below you can find the details about
-the examples (requires to install some exta dependencies via `pip install -r examples/requirements.txt`)
+We provide a set of examples to get you started. 
 
-- [Train a 3D Gaussian splatting model on a COLMAP capture.](https://docs.gsplat.studio/main/examples/colmap.html)
-- [Fit a 2D image with 3D Gaussians.](https://docs.gsplat.studio/main/examples/image.html)
-- [Render a large scene in real-time.](https://docs.gsplat.studio/main/examples/large_scale.html)
+1. Clone the examples folder:
 
+   ```bash
+   git clone --no-checkout https://github.com/rocm/gsplat.git
+   cd gsplat
+   git sparse-checkout init --cone
+   git sparse-checkout add examples
+   git checkout main
+   ```
 
-## Development and Contribution
+2. Install dependencies and download datasets:
 
-This repository was born from the curiosity of people on the Nerfstudio team trying to understand a new rendering technique. We welcome contributions of any kind and are open to feedback, bug-reports, and improvements to help expand the capabilities of this software.
+   ```bash
+   cd examples
+   pip install -r requirements.txt
+   python datasets/download_dataset.py
+   ```
 
-This project is developed by the following wonderful contributors (unordered):
+3. To run the examples, refer to the [run a GSplat example](docs/examples/gsplat-examples.rst) topic. The examples are as follows:
 
-- [Angjoo Kanazawa](https://people.eecs.berkeley.edu/~kanazawa/) (UC Berkeley): Mentor of the project.
-- [Matthew Tancik](https://www.matthewtancik.com/about-me) (Luma AI): Mentor of the project.
-- [Vickie Ye](https://people.eecs.berkeley.edu/~vye/) (UC Berkeley): Project lead. v0.1 lead.
-- [Matias Turkulainen](https://maturk.github.io/) (Aalto University): Core developer.
-- [Ruilong Li](https://www.liruilong.cn/) (UC Berkeley): Core developer. v1.0 lead.
-- [Justin Kerr](https://kerrj.github.io/) (UC Berkeley): Core developer.
-- [Brent Yi](https://github.com/brentyi) (UC Berkeley): Core developer.
-- [Zhuoyang Pan](https://panzhy.com/) (ShanghaiTech University): Core developer.
-- [Jianbo Ye](http://www.jianboye.org/) (Amazon): Core developer.
+- [Fit a Single Image](docs/examples/gsplat-examples.rst#fit-a-single-image)
+- [Fit a 2D image with 3D Gaussians](docs/examples/gsplat-examples.rst#fit-a-single-2d-image-with-3d-gaussians)
+- [Render a large scene in real-time](docs/examples/gsplat-examples.rst#render-a-large-scene-in-real-time)
 
-We also have a white paper with about the project with benchmarking and mathematical supplement with conventions and derivations, available [here](https://arxiv.org/abs/2409.06765). If you find this library useful in your projects or papers, please consider citing:
+## Evaluation
 
-```
+This repository includes a standalone script that reproduces the official Gaussian Splatting benchmarks with equivalent performance on **PSNR, SSIM, LPIPS**, and the number of converged Gaussians.  
+
+Thanks to GSplat’s optimized GPU implementation:  
+- Training uses up to **4× less GPU memory**  
+- Training is up to **15% faster** compared to the official implementation  
+
+## Building from source
+Refer to the [installation instructions](docs/install/gsplat-install.rst) to learn how to build the GSplat library from source.
+
+## Contributing
+We welcome contributions of all kinds and are open to feedback, bug-reports, and improvements, to help expand the capabilities of this software. See [contributing to GSplat](docs/about/contribute-to-gsplat.rst) for more info.
+
+## Core Development
+
+This project is developed and maintained by the following contributors (unordered):  
+
+- [Angjoo Kanazawa](https://people.eecs.berkeley.edu/~kanazawa/) (UC Berkeley) – Mentor  
+- [Matthew Tancik](https://www.matthewtancik.com/about-me) (Luma AI) – Mentor  
+- [Vickie Ye](https://people.eecs.berkeley.edu/~vye/) (UC Berkeley) – Project Lead (v0.1)  
+- [Matias Turkulainen](https://maturk.github.io/) (Aalto University) – Core Developer  
+- [Ruilong Li](https://www.liruilong.cn/) (UC Berkeley) – Core Developer (v1.0 Lead)  
+- [Justin Kerr](https://kerrj.github.io/) (UC Berkeley) – Core Developer  
+- [Brent Yi](https://github.com/brentyi) (UC Berkeley) – Core Developer  
+- [Zhuoyang Pan](https://panzhy.com/) (ShanghaiTech University) – Core Developer  
+- [Jianbo Ye](http://www.jianboye.org/) (Amazon) – Core Developer  
+
+## Citation
+
+We also provide a white paper with benchmarks, mathematical derivations, and conventions: [arXiv link](https://arxiv.org/abs/2409.06765).  
+
+If you use this library in your research, please cite:
+
+```bibtex
 @article{ye2025gsplat,
-  title={gsplat: An open-source library for Gaussian splatting},
+  title={GSplat: An open-source library for Gaussian splatting},
   author={Ye, Vickie and Li, Ruilong and Kerr, Justin and Turkulainen, Matias and Yi, Brent and Pan, Zhuoyang and Seiskari, Otto and Ye, Jianbo and Hu, Jeffrey and Tancik, Matthew and Angjoo Kanazawa},
   journal={Journal of Machine Learning Research},
   volume={26},
@@ -95,5 +127,3 @@ We also have a white paper with about the project with benchmarking and mathemat
   year={2025}
 }
 ```
-
-We welcome contributions of any kind and are open to feedback, bug-reports, and improvements to help expand the capabilities of this software. Please check [docs/DEV.md](docs/DEV.md) for more info about development.

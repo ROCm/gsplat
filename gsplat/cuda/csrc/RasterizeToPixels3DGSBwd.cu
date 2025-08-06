@@ -16,31 +16,37 @@ namespace gsplat {
 
 namespace cg = cooperative_groups;
 
+//compiler issue with mov_dpp intrinsic seen in Rocm 6.4.1, so mov_dpp intrinsic is temporarily commented out and replaced with rocprim which also uses dpp when in single wave
 #if USE_ROCM
 template <typename T>
 __device__ void dpp_sclr_warpSum(T &val) {
-	T tmp = val + __builtin_amdgcn_mov_dpp(val, 0x118, 0xf, 0xf, 1); //ROW_SHR8
-	tmp = tmp + __builtin_amdgcn_mov_dpp(tmp, 0x114, 0xf, 0xf, 1); //ROW_SHR4
-	tmp = tmp + __builtin_amdgcn_mov_dpp(tmp, 0x112, 0xf, 0xf, 1); //ROW_SHR2
-	tmp = tmp + __builtin_amdgcn_mov_dpp(tmp, 0x111, 0xf, 0xf, 1); //ROW_SHR1
-	tmp = tmp + __builtin_amdgcn_mov_dpp(tmp, 0x142, 0xf, 0xf, 1); //BCAST15
-	tmp = tmp + __builtin_amdgcn_mov_dpp(tmp, 0x143, 0xf, 0xf, 1); //BCAST31
-	val = __shfl(tmp, 63);
+	// T tmp = val + __builtin_amdgcn_mov_dpp(val, 0x118, 0xf, 0xf, 1); //ROW_SHR8
+	// tmp = tmp + __builtin_amdgcn_mov_dpp(tmp, 0x114, 0xf, 0xf, 1); //ROW_SHR4
+	// tmp = tmp + __builtin_amdgcn_mov_dpp(tmp, 0x112, 0xf, 0xf, 1); //ROW_SHR2
+	// tmp = tmp + __builtin_amdgcn_mov_dpp(tmp, 0x111, 0xf, 0xf, 1); //ROW_SHR1
+	// tmp = tmp + __builtin_amdgcn_mov_dpp(tmp, 0x142, 0xf, 0xf, 1); //BCAST15
+	// tmp = tmp + __builtin_amdgcn_mov_dpp(tmp, 0x143, 0xf, 0xf, 1); //BCAST31
+	// val = __shfl(tmp, 63);
+    rocprim_warpSum<64>(val, NULL);
 }
 
 // This version does reduce but stores the result to a specific location (n_val) on a given lane (ln)
 // It can be sued to generate results than can be stored wave-coalesed.
 template <typename T>
 __device__ void dpp_sprd_warpSum(T &val, int ln, T &n_val) {
-	T tmp = val + __builtin_amdgcn_mov_dpp(val, 0x118, 0xf, 0xf, 1); //ROW_SHR8
-	tmp = tmp + __builtin_amdgcn_mov_dpp(tmp, 0x114, 0xf, 0xf, 1); //ROW_SHR4
-	tmp = tmp + __builtin_amdgcn_mov_dpp(tmp, 0x112, 0xf, 0xf, 1); //ROW_SHR2
-	tmp = tmp + __builtin_amdgcn_mov_dpp(tmp, 0x111, 0xf, 0xf, 1); //ROW_SHR1
-	tmp = tmp + __builtin_amdgcn_mov_dpp(tmp, 0x142, 0xf, 0xf, 1); //BCAST15
-	tmp = tmp + __builtin_amdgcn_mov_dpp(tmp, 0x143, 0xf, 0xf, 1); //BCAST31
-	tmp = __shfl(tmp, 63);
-	if (cg::this_thread_block().thread_rank() == ln)
-	       n_val = tmp;	
+	// T tmp = val + __builtin_amdgcn_mov_dpp(val, 0x118, 0xf, 0xf, 1); //ROW_SHR8
+	// tmp = tmp + __builtin_amdgcn_mov_dpp(tmp, 0x114, 0xf, 0xf, 1); //ROW_SHR4
+	// tmp = tmp + __builtin_amdgcn_mov_dpp(tmp, 0x112, 0xf, 0xf, 1); //ROW_SHR2
+	// tmp = tmp + __builtin_amdgcn_mov_dpp(tmp, 0x111, 0xf, 0xf, 1); //ROW_SHR1
+	// tmp = tmp + __builtin_amdgcn_mov_dpp(tmp, 0x142, 0xf, 0xf, 1); //BCAST15
+	// tmp = tmp + __builtin_amdgcn_mov_dpp(tmp, 0x143, 0xf, 0xf, 1); //BCAST31
+	// tmp = __shfl(tmp, 63);
+	// if (cg::this_thread_block().thread_rank() == ln)
+	//        n_val = tmp;
+    T tmp = val;
+    rocprim_warpSum<64>(tmp, NULL);
+    if (cg::this_thread_block().thread_rank() == ln)
+        n_val = tmp;
 }
 
 // Vector eltwise reduce, with results spread across lanes of the wave
@@ -68,14 +74,22 @@ __device__ void dpp_warpSum(T &val) {
 
 template <typename T>
 __device__ T dpp_warpMax(T &val) {
-	using ncT = std::remove_const<T>::type;
-	ncT tmp = max(val, __builtin_amdgcn_mov_dpp(val, 0x118, 0xf, 0xf, 1)); //ROW_SHR8
-	tmp = max(tmp, __builtin_amdgcn_mov_dpp(tmp, 0x114, 0xf, 0xf, 1)); //ROW_SHR4
-	tmp = max(tmp, __builtin_amdgcn_mov_dpp(tmp, 0x112, 0xf, 0xf, 1)); //ROW_SHR2
-	tmp = max(tmp, __builtin_amdgcn_mov_dpp(tmp, 0x111, 0xf, 0xf, 1)); //ROW_SHR1
-	tmp = max(tmp, __builtin_amdgcn_mov_dpp(tmp, 0x142, 0xf, 0xf, 1)); //BCAST15
-	tmp = max(tmp, __builtin_amdgcn_mov_dpp(tmp, 0x143, 0xf, 0xf, 1)); //BCAST31
-	return __shfl(tmp, 63);
+	// using ncT = typename std::remove_const<T>::type;
+	// ncT tmp = max(val, __builtin_amdgcn_mov_dpp(val, 0x118, 0xf, 0xf, 1)); //ROW_SHR8
+	// tmp = max(tmp, __builtin_amdgcn_mov_dpp(tmp, 0x114, 0xf, 0xf, 1)); //ROW_SHR4
+	// tmp = max(tmp, __builtin_amdgcn_mov_dpp(tmp, 0x112, 0xf, 0xf, 1)); //ROW_SHR2
+	// tmp = max(tmp, __builtin_amdgcn_mov_dpp(tmp, 0x111, 0xf, 0xf, 1)); //ROW_SHR1
+	// tmp = max(tmp, __builtin_amdgcn_mov_dpp(tmp, 0x142, 0xf, 0xf, 1)); //BCAST15
+	// tmp = max(tmp, __builtin_amdgcn_mov_dpp(tmp, 0x143, 0xf, 0xf, 1)); //BCAST31
+	// return __shfl(tmp, 63);
+    __shared__ typename rocprim::warp_reduce<int32_t, 64>::storage_type warp_storage;
+    rocprim::warp_reduce<int32_t, 64> wreduce;
+    int32_t max;
+    wreduce.reduce(val,            // 1) value held by this lane
+            max,               // 2) reference that will receive the result
+            warp_storage,                 // 3) shared-memory storage
+            rocprim::maximum<int32_t>());
+    return max;
 }
 
 template <uint32_t CDIM, typename scalar_t>
@@ -331,26 +345,26 @@ __global__ void rasterize_bs64_to_pixels_3dgs_bwd_kernel(
 #pragma unroll
             for (uint32_t k = 0; k < CDIM; k+=64) {
 		if (k + warp.thread_rank() < CDIM)
-                    atomicAddNoRet(v_rgb_ptr + k + warp.thread_rank(), v_rgb_local[k/64]);
+                    atomicAdd(v_rgb_ptr + k + warp.thread_rank(), v_rgb_local[k/64]);
             }
 
             if (warp.thread_rank() == 0) {
                 float *v_conic_ptr = (float *)(v_conics) + 3 * g;
-                atomicAddNoRet(v_conic_ptr, v_conic_local.x);
-                atomicAddNoRet(v_conic_ptr + 1, v_conic_local.y);
-                atomicAddNoRet(v_conic_ptr + 2, v_conic_local.z);
+                atomicAdd(v_conic_ptr, v_conic_local.x);
+                atomicAdd(v_conic_ptr + 1, v_conic_local.y);
+                atomicAdd(v_conic_ptr + 2, v_conic_local.z);
 
                 float *v_xy_ptr = (float *)(v_means2d) + 2 * g;
-                atomicAddNoRet(v_xy_ptr, v_xy_local.x);
-                atomicAddNoRet(v_xy_ptr + 1, v_xy_local.y);
+                atomicAdd(v_xy_ptr, v_xy_local.x);
+                atomicAdd(v_xy_ptr + 1, v_xy_local.y);
 
                 if (v_means2d_abs != nullptr) {
                     float *v_xy_abs_ptr = (float *)(v_means2d_abs) + 2 * g;
-                    atomicAddNoRet(v_xy_abs_ptr, v_xy_abs_local.x);
-                    atomicAddNoRet(v_xy_abs_ptr + 1, v_xy_abs_local.y);
+                    atomicAdd(v_xy_abs_ptr, v_xy_abs_local.x);
+                    atomicAdd(v_xy_abs_ptr + 1, v_xy_abs_local.y);
                 }
 
-                atomicAddNoRet(v_opacities + g, v_opacity_local);
+                atomicAdd(v_opacities + g, v_opacity_local);
             }
         }
     }
@@ -641,25 +655,25 @@ __global__ void rasterize_to_pixels_3dgs_bwd_kernel(
                 float *v_rgb_ptr = (float *)(v_colors) + CDIM * g;
 #pragma unroll
                 for (uint32_t k = 0; k < CDIM; ++k) {
-                    atomicAddNoRet(v_rgb_ptr + k, v_rgb_local[k]);
+                    atomicAdd(v_rgb_ptr + k, v_rgb_local[k]);
                 }
 
                 float *v_conic_ptr = (float *)(v_conics) + 3 * g;
-                atomicAddNoRet(v_conic_ptr, v_conic_local.x);
-                atomicAddNoRet(v_conic_ptr + 1, v_conic_local.y);
-                atomicAddNoRet(v_conic_ptr + 2, v_conic_local.z);
+                atomicAdd(v_conic_ptr, v_conic_local.x);
+                atomicAdd(v_conic_ptr + 1, v_conic_local.y);
+                atomicAdd(v_conic_ptr + 2, v_conic_local.z);
 
                 float *v_xy_ptr = (float *)(v_means2d) + 2 * g;
-                atomicAddNoRet(v_xy_ptr, v_xy_local.x);
-                atomicAddNoRet(v_xy_ptr + 1, v_xy_local.y);
+                atomicAdd(v_xy_ptr, v_xy_local.x);
+                atomicAdd(v_xy_ptr + 1, v_xy_local.y);
 
                 if (v_means2d_abs != nullptr) {
                     float *v_xy_abs_ptr = (float *)(v_means2d_abs) + 2 * g;
-                    atomicAddNoRet(v_xy_abs_ptr, v_xy_abs_local.x);
-                    atomicAddNoRet(v_xy_abs_ptr + 1, v_xy_abs_local.y);
+                    atomicAdd(v_xy_abs_ptr, v_xy_abs_local.x);
+                    atomicAdd(v_xy_abs_ptr + 1, v_xy_abs_local.y);
                 }
 
-                atomicAddNoRet(v_opacities + g, v_opacity_local);
+                atomicAdd(v_opacities + g, v_opacity_local);
             }
             #else
             warpSum<CDIM>(v_rgb_local, warp);
@@ -901,3 +915,4 @@ __INS__(513)
 #undef __INS__
 
 } // namespace gsplat
+

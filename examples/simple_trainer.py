@@ -21,7 +21,7 @@ from datasets.traj import (
     generate_interpolated_path,
     generate_spiral_path,
 )
-from fused_ssim import fused_ssim
+# from fused_ssim import fused_ssim
 from torch import Tensor
 from torch.nn.parallel import DistributedDataParallel as DDP
 from torch.utils.tensorboard import SummaryWriter
@@ -681,8 +681,11 @@ class Runner:
 
             # loss
             l1loss = F.l1_loss(colors, pixels)
-            ssimloss = 1.0 - fused_ssim(
-                colors.permute(0, 3, 1, 2), pixels.permute(0, 3, 1, 2), padding="valid"
+            # ssimloss = 1.0 - fused_ssim(
+            #     colors.permute(0, 3, 1, 2), pixels.permute(0, 3, 1, 2), padding="valid"
+            # )
+            ssimloss = 1.0 - self.ssim(
+                 colors.permute(0, 3, 1, 2), pixels.permute(0, 3, 1, 2)
             )
             loss = l1loss * (1.0 - cfg.ssim_lambda) + ssimloss * cfg.ssim_lambda
             if cfg.depth_loss:
@@ -901,6 +904,36 @@ class Runner:
                 )
                 # Update the scene.
                 self.viewer.update(step, num_train_rays_per_step)
+
+
+
+
+        # After training completes, merge checkpoints across all ranks
+        if world_rank == 0 and world_size > 1:
+            print("Merging checkpoints from all ranks to export global .ply...")
+            ckpt_files = [
+                f"{self.ckpt_dir}/ckpt_{max_steps-1}_rank{r}.pt"
+                for r in range(world_size)
+            ]
+            ckpts = [torch.load(f, map_location="cpu") for f in ckpt_files]
+
+            # Merge splats
+            splats_merged = {}
+            for k in ckpts[0]["splats"].keys():
+                splats_merged[k] = torch.cat([ckpt["splats"][k] for ckpt in ckpts], dim=0)
+
+            # Export as one global ply
+            export_splats(
+                means=splats_merged["means"],
+                scales=splats_merged["scales"],
+                quats=splats_merged["quats"],
+                opacities=splats_merged["opacities"],
+                sh0=splats_merged["sh0"],
+                shN=splats_merged["shN"],
+                format="ply",
+                save_to=f"{self.ply_dir}/point_cloud_{max_steps-1}_distributed_merged.ply",
+            )
+            print(f"Global .ply exported to {self.ply_dir}/point_cloud_{max_steps-1}_distributed_merged.ply")
 
     @torch.no_grad()
     def eval(self, step: int, stage: str = "val"):
@@ -1259,3 +1292,4 @@ if __name__ == "__main__":
         assert cfg.with_eval3d, "Training with UT requires setting `with_eval3d` flag."
 
     cli(main, cfg, verbose=True)
+

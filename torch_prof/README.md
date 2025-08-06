@@ -7,26 +7,11 @@ A comprehensive profiling framework for gsplat using PyTorch Profiler, designed 
 This framework provides automated profiling for:
 - All test files (`test_*.py`)
 - Benchmark script (`profiling/main.py`)
-- Training scripts (`simple_trainer.py`, `simple_trainer_2dgs.py`)
 
 All profiling traces are saved to `torch_prof/logs/` and can be viewed with TensorBoard or Chrome tracing.
 
 ## Quick Usage
 
-### Profile Training Scripts Only
-```bash
-# Profile 3D Gaussian Splatting trainer with defaults
-python torch_prof/profile_tests.py --trainers simple_trainer
-
-# Profile 2D Gaussian Splatting trainer with defaults
-python torch_prof/profile_tests.py --trainers simple_trainer_2dgs
-
-# Profile both trainers
-python torch_prof/profile_tests.py --trainers simple_trainer simple_trainer_2dgs
-
-# Profile with custom data directory
-python torch_prof/profile_tests.py --trainers simple_trainer --trainer-data-dir 360_v2/bicycle
-```
 
 ### Profile Tests Only
 ```bash
@@ -46,7 +31,7 @@ python torch_prof/profile_tests.py --include-main
 ### Profile Everything
 ```bash
 # Profile all components
-python torch_prof/profile_tests.py --include-main --trainers simple_trainer simple_trainer_2dgs --tests test_basic.py
+python torch_prof/profile_tests.py --include-main --tests test_basic.py
 ```
 
 ## Detailed Usage

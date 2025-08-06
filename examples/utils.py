@@ -156,7 +156,6 @@ def set_random_seed(seed: int):
     torch.manual_seed(seed)
 
 
-# ref: https://github.com/hbb1/2d-gaussian-splatting/blob/main/utils/general_utils.py#L163
 def colormap(img, cmap="jet"):
     W, H = img.shape[:2]
     dpi = 300
