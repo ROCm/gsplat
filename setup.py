@@ -150,11 +150,14 @@ def get_extensions():
         else:
             nvcc_flags += ["--expt-relaxed-constexpr"]
 
-        # GLM/Torch has spammy and very annoyingly verbose warnings that this suppresses
-        nvcc_flags += ["-diag-suppress", "20012,186"]
-        extra_compile_args["nvcc"] = nvcc_flags
-        if sys.platform == "win32":
-            extra_compile_args["nvcc"] += ["-DWIN32_LEAN_AND_MEAN"]
+    # GLM/Torch has spammy and very annoyingly verbose warnings that this suppresses
+    nvcc_flags += ["-diag-suppress", "20012,186"]
+    extra_compile_args["nvcc"] = nvcc_flags
+    if sys.platform == "win32":
+        extra_compile_args["nvcc"] += [
+            "-DWIN32_LEAN_AND_MEAN",
+            "-allow-unsupported-compiler",
+        ]
 
         current_dir = pathlib.Path(__file__).parent.resolve()
         glm_path = osp.join(current_dir, "gsplat", "cuda", "csrc", "third_party", "glm")
@@ -211,3 +214,4 @@ setup(
 if need_to_unset_max_jobs:
     print("Unsetting MAX_JOBS")
     os.environ.pop("MAX_JOBS")
+
