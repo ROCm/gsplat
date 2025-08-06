@@ -55,7 +55,7 @@ def get_extensions():
         if WITH_SYMBOLS:
             extra_compile_args["cxx"] += ["-g", "-O0"]
         else:
-            extra_compile_args = {"cxx": ["-O3"]}
+            extra_compile_args = {"cxx": ["-O3", "-Wno-unused-result", "-Wno-attributes", "-Wno-unused-but-set-variable", "-Wno-unused-variable", "-Wno-switch", "-Wno-comment"]}
 
         extra_link_args = ["-s"]
 
@@ -214,4 +214,5 @@ setup(
 if need_to_unset_max_jobs:
     print("Unsetting MAX_JOBS")
     os.environ.pop("MAX_JOBS")
+
 
