@@ -37,10 +37,11 @@ namespace gsplat {
 #define CUB_WRAPPER(func, ...)                                                 \
     do {                                                                       \
         size_t temp_storage_bytes = 0;                                         \
-        func(nullptr, temp_storage_bytes, __VA_ARGS__);                        \
+        auto res = func(nullptr, temp_storage_bytes, __VA_ARGS__);                        \
         auto &caching_allocator = *::c10::hip::HIPCachingAllocator::get();   \
         auto temp_storage = caching_allocator.allocate(temp_storage_bytes);    \
-        func(temp_storage.get(), temp_storage_bytes, __VA_ARGS__);             \
+        res = func(temp_storage.get(), temp_storage_bytes, __VA_ARGS__);  \
+	assert(res == hipSuccess);                                            \
     } while (false)
 #endif
 } // namespace gsplat
