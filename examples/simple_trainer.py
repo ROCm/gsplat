@@ -21,7 +21,7 @@ from datasets.traj import (
     generate_interpolated_path,
     generate_spiral_path,
 )
-from fused_ssim import fused_ssim
+# from fused_ssim import fused_ssim
 from torch import Tensor
 from torch.nn.parallel import DistributedDataParallel as DDP
 from torch.utils.tensorboard import SummaryWriter
@@ -681,8 +681,11 @@ class Runner:
 
             # loss
             l1loss = F.l1_loss(colors, pixels)
-            ssimloss = 1.0 - fused_ssim(
-                colors.permute(0, 3, 1, 2), pixels.permute(0, 3, 1, 2), padding="valid"
+            # ssimloss = 1.0 - fused_ssim(
+            #     colors.permute(0, 3, 1, 2), pixels.permute(0, 3, 1, 2), padding="valid"
+            # )
+            ssimloss = 1.0 - self.ssim(
+                 colors.permute(0, 3, 1, 2), pixels.permute(0, 3, 1, 2)
             )
             loss = l1loss * (1.0 - cfg.ssim_lambda) + ssimloss * cfg.ssim_lambda
             if cfg.depth_loss:
@@ -710,16 +713,9 @@ class Runner:
 
             # regularizations
             if cfg.opacity_reg > 0.0:
-                loss = (
-                    loss
-                    + cfg.opacity_reg
-                    * torch.abs(torch.sigmoid(self.splats["opacities"])).mean()
-                )
+                loss += cfg.opacity_reg * torch.sigmoid(self.splats["opacities"]).mean()
             if cfg.scale_reg > 0.0:
-                loss = (
-                    loss
-                    + cfg.scale_reg * torch.abs(torch.exp(self.splats["scales"])).mean()
-                )
+                loss += cfg.scale_reg * torch.exp(self.splats["scales"]).mean()
 
             loss.backward()
 
