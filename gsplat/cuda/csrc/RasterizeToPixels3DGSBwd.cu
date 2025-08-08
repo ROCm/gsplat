@@ -68,7 +68,7 @@ __device__ void dpp_warpSum(T &val) {
 
 template <typename T>
 __device__ T dpp_warpMax(T &val) {
-	using ncT = std::remove_const<T>::type;
+	using ncT = typename std::remove_const<T>::type;
 	ncT tmp = max(val, __builtin_amdgcn_mov_dpp(val, 0x118, 0xf, 0xf, 1)); //ROW_SHR8
 	tmp = max(tmp, __builtin_amdgcn_mov_dpp(tmp, 0x114, 0xf, 0xf, 1)); //ROW_SHR4
 	tmp = max(tmp, __builtin_amdgcn_mov_dpp(tmp, 0x112, 0xf, 0xf, 1)); //ROW_SHR2
@@ -331,26 +331,26 @@ __global__ void rasterize_bs64_to_pixels_3dgs_bwd_kernel(
 #pragma unroll
             for (uint32_t k = 0; k < CDIM; k+=64) {
 		if (k + warp.thread_rank() < CDIM)
-                    atomicAddNoRet(v_rgb_ptr + k + warp.thread_rank(), v_rgb_local[k/64]);
+                    atomicAdd(v_rgb_ptr + k + warp.thread_rank(), v_rgb_local[k/64]);
             }
 
             if (warp.thread_rank() == 0) {
                 float *v_conic_ptr = (float *)(v_conics) + 3 * g;
-                atomicAddNoRet(v_conic_ptr, v_conic_local.x);
-                atomicAddNoRet(v_conic_ptr + 1, v_conic_local.y);
-                atomicAddNoRet(v_conic_ptr + 2, v_conic_local.z);
+                atomicAdd(v_conic_ptr, v_conic_local.x);
+                atomicAdd(v_conic_ptr + 1, v_conic_local.y);
+                atomicAdd(v_conic_ptr + 2, v_conic_local.z);
 
                 float *v_xy_ptr = (float *)(v_means2d) + 2 * g;
-                atomicAddNoRet(v_xy_ptr, v_xy_local.x);
-                atomicAddNoRet(v_xy_ptr + 1, v_xy_local.y);
+                atomicAdd(v_xy_ptr, v_xy_local.x);
+                atomicAdd(v_xy_ptr + 1, v_xy_local.y);
 
                 if (v_means2d_abs != nullptr) {
                     float *v_xy_abs_ptr = (float *)(v_means2d_abs) + 2 * g;
-                    atomicAddNoRet(v_xy_abs_ptr, v_xy_abs_local.x);
-                    atomicAddNoRet(v_xy_abs_ptr + 1, v_xy_abs_local.y);
+                    atomicAdd(v_xy_abs_ptr, v_xy_abs_local.x);
+                    atomicAdd(v_xy_abs_ptr + 1, v_xy_abs_local.y);
                 }
 
-                atomicAddNoRet(v_opacities + g, v_opacity_local);
+                atomicAdd(v_opacities + g, v_opacity_local);
             }
         }
     }
@@ -641,25 +641,25 @@ __global__ void rasterize_to_pixels_3dgs_bwd_kernel(
                 float *v_rgb_ptr = (float *)(v_colors) + CDIM * g;
 #pragma unroll
                 for (uint32_t k = 0; k < CDIM; ++k) {
-                    atomicAddNoRet(v_rgb_ptr + k, v_rgb_local[k]);
+                    atomicAdd(v_rgb_ptr + k, v_rgb_local[k]);
                 }
 
                 float *v_conic_ptr = (float *)(v_conics) + 3 * g;
-                atomicAddNoRet(v_conic_ptr, v_conic_local.x);
-                atomicAddNoRet(v_conic_ptr + 1, v_conic_local.y);
-                atomicAddNoRet(v_conic_ptr + 2, v_conic_local.z);
+                atomicAdd(v_conic_ptr, v_conic_local.x);
+                atomicAdd(v_conic_ptr + 1, v_conic_local.y);
+                atomicAdd(v_conic_ptr + 2, v_conic_local.z);
 
                 float *v_xy_ptr = (float *)(v_means2d) + 2 * g;
-                atomicAddNoRet(v_xy_ptr, v_xy_local.x);
-                atomicAddNoRet(v_xy_ptr + 1, v_xy_local.y);
+                atomicAdd(v_xy_ptr, v_xy_local.x);
+                atomicAdd(v_xy_ptr + 1, v_xy_local.y);
 
                 if (v_means2d_abs != nullptr) {
                     float *v_xy_abs_ptr = (float *)(v_means2d_abs) + 2 * g;
-                    atomicAddNoRet(v_xy_abs_ptr, v_xy_abs_local.x);
-                    atomicAddNoRet(v_xy_abs_ptr + 1, v_xy_abs_local.y);
+                    atomicAdd(v_xy_abs_ptr, v_xy_abs_local.x);
+                    atomicAdd(v_xy_abs_ptr + 1, v_xy_abs_local.y);
                 }
 
-                atomicAddNoRet(v_opacities + g, v_opacity_local);
+                atomicAdd(v_opacities + g, v_opacity_local);
             }
             #else
             warpSum<CDIM>(v_rgb_local, warp);
@@ -901,3 +901,4 @@ __INS__(513)
 #undef __INS__
 
 } // namespace gsplat
+

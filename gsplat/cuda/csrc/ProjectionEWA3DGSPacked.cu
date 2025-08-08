@@ -425,7 +425,7 @@ __global__ void projection_ewa_3dgs_packed_bwd_kernel(
     if (idx % 100000 == 0 && DEBUG_PRINT) {
         printf("\n--- Start Debug for idx = %u (Thread %u) ---\n", idx, threadIdx.x);
         printf("  B=%u, C=%u, N=%u, nnz=%u\n", B, C, N, nnz);
-        printf("  bid=%lld, cid=%lld, gid=%lld\n", bid, cid, gid);
+        printf("  bid=%ld, cid=%ld, gid=%ld\n", bid, cid, gid);
         printf("  sparse_grad=%d\n", (int)sparse_grad);
 
         // Print initial input pointers' values (cast to float for printf)
