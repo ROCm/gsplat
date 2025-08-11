@@ -7,13 +7,13 @@ gsplat is an open-source library for CUDA accelerated rasterization of gaussians
 This repo is the HIP port of the gsplat repo which is enabled and optimised for RCOM runing on AMD Instinct processors. 
 ## System & Software Requirements
 - AMD Instinct Processors - MI 300X
-- Ubunut 22.04 and above
-- Rocm 6.4
-- Python 3.12
+- Ubuntu 22.04 and above
+- ROCm 6.4
+- Python 3.11
   
 ## Installation
 
- - Install [Pytorch](https://pytorch.org/get-started/locally/) first. The easiet way is the use the official docker image which has pytorch for Rocm.
+ - Install [Pytorch](https://pytorch.org/get-started/locally/) first. The easiet way is the use the official docker image which has pytorch for ROCm.
 
     ```bash
     docker run -it --network=host --device=/dev/kfd --device=/dev/dri --group-add=video --ipc=host --cap-add=SYS_PTRACE --security-opt seccomp=unconfined --shm-size 8G -v $HOME/dockerx:/dockerx -w /dockerx rocm/pytorch​:latest 
@@ -76,11 +76,11 @@ git clone https://github.com/rocm/gsplat.git
    
 ```bash
 cd gsplat/gsplat/cuda/csrc/third_party 
-git clone google/glog 
+git clone https://github.com/google/glog.git
 cd glog
 cmake -S . -B build -G "Unix Makefiles" -DCMAKE_INSTALL_PREFIX:PATH=~/.local
 cmake --build build --target install
-git clone GitHub - g-truc/glm: OpenGL Mathematics (GLM) 
+git clone https://github.com/g-truc/glm
 cd glm
 cmake \
     -DGLM_BUILD_TESTS=OFF \
