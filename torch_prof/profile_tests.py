@@ -224,6 +224,8 @@ def main():
                        help="Profile training scripts (simple_trainer, simple_trainer_2dgs)")
     parser.add_argument("--trainer-data-dir", 
                        help="Data directory for training (optional, uses trainer defaults if not specified)")
+    parser.add_argument("--trainer-args", nargs="*", default=[],
+                       help="Additional arguments to pass to trainer scripts (e.g., default, mcmc)")
     parser.add_argument("--summary-file", default="torch_prof/profiling_summary.json",
                        help="Output file for profiling summary")
     
@@ -273,8 +275,8 @@ def main():
     
     # Profile training scripts if requested
     if args.trainers:
-        # Build trainer arguments - only add data_dir if specified
-        trainer_args = []
+        # Build trainer arguments - add trainer-specific args first, then data_dir if specified
+        trainer_args = list(args.trainer_args) if args.trainer_args else []
         if args.trainer_data_dir:
             trainer_args.append(f"data_dir={args.trainer_data_dir}")
         
