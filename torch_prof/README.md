@@ -15,17 +15,23 @@ All profiling traces are saved to `torch_prof/logs/` and can be viewed with Tens
 
 ### Profile Training Scripts Only
 ```bash
-# Profile 3D Gaussian Splatting trainer with defaults
-python torch_prof/profile_tests.py --trainers simple_trainer
+# Profile 3D Gaussian Splatting trainer with default densification
+python torch_prof/profile_tests.py --trainers simple_trainer --trainer-args default
+
+# Profile 3D Gaussian Splatting trainer with MCMC densification
+python torch_prof/profile_tests.py --trainers simple_trainer --trainer-args mcmc
 
 # Profile 2D Gaussian Splatting trainer with defaults
 python torch_prof/profile_tests.py --trainers simple_trainer_2dgs
 
 # Profile both trainers
-python torch_prof/profile_tests.py --trainers simple_trainer simple_trainer_2dgs
+python torch_prof/profile_tests.py --trainers simple_trainer simple_trainer_2dgs --trainer-args default
 
 # Profile with custom data directory
-python torch_prof/profile_tests.py --trainers simple_trainer --trainer-data-dir 360_v2/bicycle
+python torch_prof/profile_tests.py --trainers simple_trainer --trainer-args default --trainer-data-dir 360_v2/bicycle
+
+# Profile with additional trainer arguments
+python torch_prof/profile_tests.py --trainers simple_trainer --trainer-args default --max_steps 1000
 ```
 
 ### Profile Tests Only
