@@ -13,6 +13,92 @@ import torch
 
 __version__ = None
 exec(open("gsplat/version.py", "r").read())
+import subprocess
+
+def is_git_repo(folder_path):
+    """
+    Checks if a folder is a Git repository by running 'git rev-parse --git-dir'.
+
+    Args:
+        folder_path (str): The path to the folder.
+
+    Returns:
+        bool: True if it is a Git repository, False otherwise.
+    """
+    # First, check if the folder path is a valid directory
+    if not os.path.isdir(folder_path):
+        return False
+
+    try:
+        # Run the git command
+        result = subprocess.run(
+            ['git', 'rev-parse', '--git-dir'],
+            cwd=folder_path,
+            capture_output=True,
+            text=True
+        )
+
+        # The command returns an exit code of 0 if it's a repo
+        return result.returncode == 0
+
+    except FileNotFoundError:
+        # This exception is raised if 'git' is not in the system's PATH
+        print("Error: Git is not installed or not in your system's PATH.")
+        return False
+    except Exception as e:
+        # Handle other unexpected errors
+        print(f"An unexpected error occurred: {e}")
+        return False
+
+def get_git_rev(folder_path):
+    """
+    Checks if a folder is a Git repository and returns the latest commit SHA
+    of the main branch using Git command-line tools.
+
+    Args:
+        folder_path (str): The path to the folder to check.
+
+    Returns:
+        str: The SHA of the latest commit on the main branch, or None if
+             it's not a Git repository or the main branch doesn't exist.
+    """
+    try:
+        # Use subprocess to run 'git rev-parse main' to get the commit hash
+        # 'rev-parse' is a low-level command used to translate a human-readable
+        # name into an SHA-1.
+        command = ['git', 'rev-parse', '--short' ,"HEAD"]
+
+        # Run the command in the specified folder
+        result = subprocess.run(
+            command,
+            cwd=folder_path,
+            capture_output=True,
+            text=True,
+            check=True
+        )
+
+        # The output is the commit hash
+        commit_sha = result.stdout.strip()
+        return commit_sha
+
+    except subprocess.CalledProcessError as e:
+        # This error is raised if the command fails, which happens if 'main'
+        # branch doesn't exist
+        print(f"Error: The #{branch_name} branch does not exist or another error occurred: {e}")
+        return ""
+    except FileNotFoundError:
+        print("Error: Git is not installed or not in your system's PATH.")
+        return ""
+    except Exception as e:
+        print(f"An unexpected error occurred: {e}")
+        return ""
+    return ""
+
+if is_git_repo:
+    git_rev = get_git_rev(os.getcwd())
+    __version__ += f"+{git_rev}"
+
+print(f"VERSION = {__version__}")
 
 URL = "https://github.com/AMD-AIOSS/gsplat"
 
@@ -25,7 +111,6 @@ if not MAX_JOBS:
     need_to_unset_max_jobs = True
     os.environ["MAX_JOBS"] = "10"
     print(f"Setting MAX_JOBS to {os.environ['MAX_JOBS']}")
-WHEEL_NAME = "gsplat"
 
 def get_ext():
     from torch.utils.cpp_extension import BuildExtension
@@ -36,7 +121,6 @@ def get_extensions():
     if IS_ROCM:
         from torch.utils.cpp_extension import CUDAExtension
         print("ROCM detected, compiling with HIP support...")
-        #WHEEL_NAME = "amd_gsplat"
         from torch.utils.cpp_extension import CppExtension
 
         conda_prefix = os.getenv("CONDA_PREFIX")
@@ -176,7 +260,7 @@ def get_extensions():
 
 
 setup(
-    name=WHEEL_NAME,
+    name="gsplat",
     version=__version__,
     description=" Python package for differentiable rasterization of gaussians",
     keywords="gaussian, splatting, cuda",

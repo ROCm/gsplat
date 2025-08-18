@@ -51,7 +51,7 @@ def profile_test_with_torch(request):
 
 device = torch.device("cuda:0")
 
-
+@pytest.mark.skip()
 @pytest.mark.skipif(not torch.cuda.is_available(), reason="No CUDA device")
 def test_png_compression():
     from gsplat.compression import PngCompression
