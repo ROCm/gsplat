@@ -102,7 +102,7 @@ python setup.py bdist_wheel
 
 -  Install the GSPLAT wheel
 ```bash
-pip install dist/gsplat-1.0.0-cp311-cp311-linux_x86_64.whl
+pip install dist/gsplat*.whl
 ```
 - Run a specific test or tests:
 ```bash
