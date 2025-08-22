@@ -911,8 +911,6 @@ class Runner:
         # After training completes, merge checkpoints across all ranks
         if world_rank == 0 and world_size > 1:
             print("Merging checkpoints from all ranks to export global .ply...")
-            print("Ish world_rank ",world_rank)
-            print("Ish world_size ", world_size)
             ckpt_files = [
                 f"{self.ckpt_dir}/ckpt_{max_steps-1}_rank{r}.pt"
                 for r in range(world_size)
