@@ -905,6 +905,38 @@ class Runner:
                 # Update the scene.
                 self.viewer.update(step, num_train_rays_per_step)
 
+
+
+
+        # After training completes, merge checkpoints across all ranks
+        if world_rank == 0 and world_size > 1:
+            print("Merging checkpoints from all ranks to export global .ply...")
+            print("Ish world_rank ",world_rank)
+            print("Ish world_size ", world_size)
+            ckpt_files = [
+                f"{self.ckpt_dir}/ckpt_{max_steps-1}_rank{r}.pt"
+                for r in range(world_size)
+            ]
+            ckpts = [torch.load(f, map_location="cpu") for f in ckpt_files]
+
+            # Merge splats
+            splats_merged = {}
+            for k in ckpts[0]["splats"].keys():
+                splats_merged[k] = torch.cat([ckpt["splats"][k] for ckpt in ckpts], dim=0)
+
+            # Export as one global ply
+            export_splats(
+                means=splats_merged["means"],
+                scales=splats_merged["scales"],
+                quats=splats_merged["quats"],
+                opacities=splats_merged["opacities"],
+                sh0=splats_merged["sh0"],
+                shN=splats_merged["shN"],
+                format="ply",
+                save_to=f"{self.ply_dir}/point_cloud_{max_steps-1}_distributed_merged.ply",
+            )
+            print(f"Global .ply exported to {self.ply_dir}/point_cloud_{max_steps-1}_distributed_merged.ply")
+
     @torch.no_grad()
     def eval(self, step: int, stage: str = "val"):
         """Entry for evaluation."""
@@ -1262,3 +1294,4 @@ if __name__ == "__main__":
         assert cfg.with_eval3d, "Training with UT requires setting `with_eval3d` flag."
 
     cli(main, cfg, verbose=True)
+
