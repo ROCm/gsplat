@@ -105,6 +105,9 @@ URL = "https://github.com/AMD-AIOSS/gsplat"
 BUILD_NO_CUDA = os.getenv("BUILD_NO_CUDA", "0") == "1"
 WITH_SYMBOLS =  os.getenv("WITH_SYMBOLS", "0") == "1"
 LINE_INFO = os.getenv("LINE_INFO", "0") == "1"
+
+ENABLE_COVERAGE = os.getenv("CODE_COVERAGE", "0") == "1"
+
 MAX_JOBS = os.getenv("MAX_JOBS")
 need_to_unset_max_jobs = False
 if not MAX_JOBS:
@@ -159,7 +162,10 @@ def get_extensions():
             # Define here to support older PyTorch versions as well:
             define_macros += [("USE_ROCM", "1")]
             undef_macros += ["__HIP_NO_HALF_CONVERSIONS__"]
-
+        if ENABLE_COVERAGE:
+            extra_compile_args["cxx"] += ["-fprofile-arcs", "-ftest-coverage"]
+            #hipcc_flags += ["-fprofile-arcs", "-ftest-coverage"]
+            extra_link_args = ["-fprofile-arcs", "-ftest-coverage"]
         # Its still nvcc flags that are used for HIP compilation
         extra_compile_args["nvcc"] = hipcc_flags
         current_dir = pathlib.Path(__file__).parent.resolve()
@@ -298,5 +304,7 @@ setup(
 if need_to_unset_max_jobs:
     print("Unsetting MAX_JOBS")
     os.environ.pop("MAX_JOBS")
+
+
 
 
