@@ -163,10 +163,11 @@ def get_extensions():
             define_macros += [("USE_ROCM", "1")]
             undef_macros += ["__HIP_NO_HALF_CONVERSIONS__"]
         if ENABLE_COVERAGE:
-            extra_compile_args["cxx"] += ["-fprofile-arcs", "-ftest-coverage"]
-            #hipcc_flags += ["-fprofile-arcs", "-ftest-coverage"]
-            extra_link_args = ["-fprofile-arcs", "-ftest-coverage"]
-        # Its still nvcc flags that are used for HIP compilation
+            extra_compile_args['cxx'] += ['-fprofile-instr-generate', '-fcoverage-mapping']
+            hipcc_flags += ['-fprofile-instr-generate', '-fcoverage-mapping']
+            extra_link_args = ['-fprofile-instr-generate']
+	
+	# Its still nvcc flags that are used for HIP compilation
         extra_compile_args["nvcc"] = hipcc_flags
         current_dir = pathlib.Path(__file__).parent.resolve()
 
@@ -264,6 +265,19 @@ def get_extensions():
         )
         return [extension]
 
+import torch.utils.cpp_extension as ce
+
+def fixed_get_compiler_abi_compatibility_and_version(compiler):
+    try:
+        return ce.original_get_compiler_abi_compatibility_and_version(compiler)
+    except ValueError:
+        # Fallback for clang++ "17.0git"
+        return ("gcc", (17, 0))
+
+if not hasattr(ce, "original_get_compiler_abi_compatibility_and_version"):
+    ce.original_get_compiler_abi_compatibility_and_version = ce.get_compiler_abi_compatibility_and_version
+    ce.get_compiler_abi_compatibility_and_version = fixed_get_compiler_abi_compatibility_and_version
+
 
 setup(
     name="gsplat",
@@ -304,7 +318,5 @@ setup(
 if need_to_unset_max_jobs:
     print("Unsetting MAX_JOBS")
     os.environ.pop("MAX_JOBS")
-
-
 
 
