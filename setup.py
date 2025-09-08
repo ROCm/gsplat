@@ -106,7 +106,7 @@ BUILD_NO_CUDA = os.getenv("BUILD_NO_CUDA", "0") == "1"
 WITH_SYMBOLS =  os.getenv("WITH_SYMBOLS", "0") == "1"
 LINE_INFO = os.getenv("LINE_INFO", "0") == "1"
 
-ENABLE_COVERAGE = os.getenv("CODE_COVERAGE", "0") == "1"
+ENABLE_TEST_COVERAGE = os.getenv("ENABLE_TEST_COVERAGE", "0") == "1"
 
 MAX_JOBS = os.getenv("MAX_JOBS")
 need_to_unset_max_jobs = False
@@ -162,10 +162,10 @@ def get_extensions():
             # Define here to support older PyTorch versions as well:
             define_macros += [("USE_ROCM", "1")]
             undef_macros += ["__HIP_NO_HALF_CONVERSIONS__"]
-        if ENABLE_COVERAGE:
-            extra_compile_args['cxx'] += ['-fprofile-instr-generate', '-fcoverage-mapping']
+        if ENABLE_TEST_COVERAGE:
+            extra_compile_args['cxx'] += ['-fprofile-instr-generate', '-fcoverage-mapping', '-Qunused-arguments', '--gcc-toolchain=/usr']
             hipcc_flags += ['-fprofile-instr-generate', '-fcoverage-mapping']
-            extra_link_args = ['-fprofile-instr-generate']
+            extra_link_args += ['-fprofile-instr-generate']
 	
 	# Its still nvcc flags that are used for HIP compilation
         extra_compile_args["nvcc"] = hipcc_flags
@@ -318,5 +318,4 @@ setup(
 if need_to_unset_max_jobs:
     print("Unsetting MAX_JOBS")
     os.environ.pop("MAX_JOBS")
-
 
