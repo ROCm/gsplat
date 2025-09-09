@@ -105,6 +105,9 @@ URL = "https://github.com/AMD-AIOSS/gsplat"
 BUILD_NO_CUDA = os.getenv("BUILD_NO_CUDA", "0") == "1"
 WITH_SYMBOLS =  os.getenv("WITH_SYMBOLS", "0") == "1"
 LINE_INFO = os.getenv("LINE_INFO", "0") == "1"
+
+ENABLE_TEST_COVERAGE = os.getenv("ENABLE_TEST_COVERAGE", "0") == "1"
+
 MAX_JOBS = os.getenv("MAX_JOBS")
 need_to_unset_max_jobs = False
 if not MAX_JOBS:
@@ -159,8 +162,12 @@ def get_extensions():
             # Define here to support older PyTorch versions as well:
             define_macros += [("USE_ROCM", "1")]
             undef_macros += ["__HIP_NO_HALF_CONVERSIONS__"]
-
-        # Its still nvcc flags that are used for HIP compilation
+        if ENABLE_TEST_COVERAGE:
+            extra_compile_args['cxx'] += ['-fprofile-instr-generate', '-fcoverage-mapping', '-Qunused-arguments', '--gcc-toolchain=/usr']
+            hipcc_flags += ['-fprofile-instr-generate', '-fcoverage-mapping']
+            extra_link_args += ['-fprofile-instr-generate']
+	
+	# Its still nvcc flags that are used for HIP compilation
         extra_compile_args["nvcc"] = hipcc_flags
         current_dir = pathlib.Path(__file__).parent.resolve()
 
@@ -258,6 +265,19 @@ def get_extensions():
         )
         return [extension]
 
+import torch.utils.cpp_extension as ce
+
+def fixed_get_compiler_abi_compatibility_and_version(compiler):
+    try:
+        return ce.original_get_compiler_abi_compatibility_and_version(compiler)
+    except ValueError:
+        # Fallback for clang++ "17.0git"
+        return ("gcc", (17, 0))
+
+if not hasattr(ce, "original_get_compiler_abi_compatibility_and_version"):
+    ce.original_get_compiler_abi_compatibility_and_version = ce.get_compiler_abi_compatibility_and_version
+    ce.get_compiler_abi_compatibility_and_version = fixed_get_compiler_abi_compatibility_and_version
+
 
 setup(
     name="gsplat",
@@ -298,5 +318,4 @@ setup(
 if need_to_unset_max_jobs:
     print("Unsetting MAX_JOBS")
     os.environ.pop("MAX_JOBS")
-
 
