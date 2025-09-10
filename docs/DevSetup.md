@@ -39,9 +39,9 @@ Build steps:
 - Install Nerfacc dependency to run the tests
 
   ```bash
-  git clone https://github.com/AMD-AIOSS/nerfacc.gitConnect your Github account 
+  git clone https://github.com/AMD-AIOSS/nerfacc.git
   python setup.py bdist_wheel
-  pip install dist/nerfacc-0.5.3-cp311-cp311-linux_x86_64.whl
+  pip install dist/nerfacc*.whl
   ```
 
 - Run a specific test or tests:
