@@ -100,7 +100,7 @@ if is_git_repo:
 
 print(f"VERSION = {__version__}")
 
-URL = "https://github.com/AMD-AIOSS/gsplat"
+URL = "https://github.com/rocm/gsplat"
 
 BUILD_NO_CUDA = os.getenv("BUILD_NO_CUDA", "0") == "1"
 WITH_SYMBOLS =  os.getenv("WITH_SYMBOLS", "0") == "1"
@@ -285,6 +285,8 @@ setup(
     description=" Python package for differentiable rasterization of gaussians",
     keywords="gaussian, splatting, cuda",
     url=URL,
+	author="AMD Corporation",
+    license="Apache 2.0",
     python_requires=">=3.7",
     install_requires=[
         "ninja",
