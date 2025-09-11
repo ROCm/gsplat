@@ -46,7 +46,7 @@ def rasterization(
     eps2d: float = 0.3,
     sh_degree: Optional[int] = None,
     packed: bool = True,
-    tile_size: int = 16,
+    tile_size: int = 8, #Changed from 16 to 8 tile size as 8 has better performance on AMD GPUs
     backgrounds: Optional[Tensor] = None,
     render_mode: Literal["RGB", "D", "ED", "RGB+D", "RGB+ED"] = "RGB",
     sparse_grad: bool = False,

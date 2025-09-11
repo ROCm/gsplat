@@ -100,11 +100,14 @@ if is_git_repo:
 
 print(f"VERSION = {__version__}")
 
-URL = "https://github.com/AMD-AIOSS/gsplat"
+URL = "https://github.com/rocm/gsplat"
 
 BUILD_NO_CUDA = os.getenv("BUILD_NO_CUDA", "0") == "1"
 WITH_SYMBOLS =  os.getenv("WITH_SYMBOLS", "0") == "1"
 LINE_INFO = os.getenv("LINE_INFO", "0") == "1"
+
+ENABLE_TEST_COVERAGE = os.getenv("ENABLE_TEST_COVERAGE", "0") == "1"
+
 MAX_JOBS = os.getenv("MAX_JOBS")
 need_to_unset_max_jobs = False
 if not MAX_JOBS:
@@ -135,7 +138,7 @@ def get_extensions():
         undef_macros = []
         define_macros = []
 
-        extra_compile_args = {"cxx": ["-DGLOG_USE_GLOG_EXPORT","-D__HIP_PLATFORM_AMD__" , "-Wno-sign-compare", "-DC10_CUDA_NO_CMAKE_CONFIGURE_FILE", "-DUSE_ROCM"]}
+        extra_compile_args = {"cxx": ["-D__HIP_PLATFORM_AMD__" , "-Wno-sign-compare", "-DC10_CUDA_NO_CMAKE_CONFIGURE_FILE", "-DUSE_ROCM"]}
         if WITH_SYMBOLS:
             extra_compile_args["cxx"] += ["-g", "-O0"]
         else:
@@ -147,7 +150,7 @@ def get_extensions():
         extra_compile_args["cxx"] += ["-DAT_PARALLEL_OPENMP"]
         extra_compile_args["cxx"] += ["-fopenmp"]
 
-        hipcc_flags = [ "-DGLOG_USE_GLOG_EXPORT", "-D__HIP_PLATFORM_AMD__", "-DC10_CUDA_NO_CMAKE_CONFIGURE_FILE", "-DUSE_ROCM" , "--offload-arch=gfx942"]
+        hipcc_flags = [ "-D__HIP_PLATFORM_AMD__", "-DC10_CUDA_NO_CMAKE_CONFIGURE_FILE", "-DUSE_ROCM" , "--offload-arch=gfx942"]
         if WITH_SYMBOLS:
             hipcc_flags += ["-g", "-ggdb" , "-O0"]
         else:
@@ -159,8 +162,12 @@ def get_extensions():
             # Define here to support older PyTorch versions as well:
             define_macros += [("USE_ROCM", "1")]
             undef_macros += ["__HIP_NO_HALF_CONVERSIONS__"]
-
-        # Its still nvcc flags that are used for HIP compilation
+        if ENABLE_TEST_COVERAGE:
+            extra_compile_args['cxx'] += ['-fprofile-instr-generate', '-fcoverage-mapping', '-Qunused-arguments', '--gcc-toolchain=/usr']
+            hipcc_flags += ['-fprofile-instr-generate', '-fcoverage-mapping']
+            extra_link_args += ['-fprofile-instr-generate']
+	
+	# Its still nvcc flags that are used for HIP compilation
         extra_compile_args["nvcc"] = hipcc_flags
         current_dir = pathlib.Path(__file__).parent.resolve()
 
@@ -258,6 +265,19 @@ def get_extensions():
         )
         return [extension]
 
+import torch.utils.cpp_extension as ce
+
+def fixed_get_compiler_abi_compatibility_and_version(compiler):
+    try:
+        return ce.original_get_compiler_abi_compatibility_and_version(compiler)
+    except ValueError:
+        # Fallback for clang++ "17.0git"
+        return ("gcc", (17, 0))
+
+if not hasattr(ce, "original_get_compiler_abi_compatibility_and_version"):
+    ce.original_get_compiler_abi_compatibility_and_version = ce.get_compiler_abi_compatibility_and_version
+    ce.get_compiler_abi_compatibility_and_version = fixed_get_compiler_abi_compatibility_and_version
+
 
 setup(
     name="gsplat",
@@ -265,6 +285,8 @@ setup(
     description=" Python package for differentiable rasterization of gaussians",
     keywords="gaussian, splatting, cuda",
     url=URL,
+	author="AMD Corporation",
+    license="Apache 2.0",
     python_requires=">=3.7",
     install_requires=[
         "ninja",
@@ -298,5 +320,4 @@ setup(
 if need_to_unset_max_jobs:
     print("Unsetting MAX_JOBS")
     os.environ.pop("MAX_JOBS")
-
 
