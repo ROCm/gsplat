@@ -204,8 +204,6 @@ __global__ void projection_2dgs_fused_fwd_kernel(
     // pro implementation
     // ==============================================
     // this is purely resulted from algebraic manipulation
-    // check here for details:
-    // https://github.com/hbb1/diff-surfel-rasterization/issues/8#issuecomment-2138069016
     const float distance = sum(temp_point * M2 * M2);
 
     // ill-conditioned primitives will have distance = 0.0f, we ignore them
