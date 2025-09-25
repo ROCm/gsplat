@@ -12,7 +12,7 @@ flavor defines the site header display, select the flavor for the corresponding 
 flavor options: rocm, rocm-docs-home, rocm-blogs, rocm-ds, instinct, ai-developer-hub, local, generic
 '''
 html_theme = "rocm_docs_theme"
-html_theme_options = {"flavor": "rocm-docs-home"}
+html_theme_options = {"flavor": "gsplat"}
 
 '''
 docs_header_version is used to manually configure the version in the header. If
@@ -20,7 +20,7 @@ there exists a non-null value mapped to docs_header_version, then the header in
 the documentation page will contain the given version string.
 '''
 html_context = {
-    "docs_header_version": "3.15"
+    "docs_header_version": "1.0.0"
 }
 
 
