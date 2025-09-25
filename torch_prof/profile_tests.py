@@ -76,34 +76,6 @@ def profile_main_script():
     return {"file": "profiling/main.py", "success": True}
 
 
-def run_trainer_with_profiling(trainer_script: str, trainer_args: list = None):
-    """Run training script with profiling enabled."""
-    env = os.environ.copy()
-    env["ENABLE_PROFILER"] = "1"
-    
-    # Base command
-    cmd = ["python", trainer_script]
-    
-    # Add training arguments
-    if trainer_args:
-        cmd.extend(trainer_args)
-    
-    print(f"\n{'='*60}")
-    print(f"Running profiled training: {trainer_script}")
-    print(f"Arguments: {' '.join(trainer_args) if trainer_args else 'None'}")
-    print(f"{'='*60}\n")
-    
-    print(f"Running command: {' '.join(cmd)}")
-    result = subprocess.run(cmd, env=env, capture_output=True, text=True)
-    
-    return {
-        "file": trainer_script,
-        "arguments": trainer_args,
-        "return_code": result.returncode,
-        "stdout": result.stdout,
-        "stderr": result.stderr,
-        "success": result.returncode == 0
-    }
 
 
 def inject_profiler_to_tests():
@@ -220,12 +192,6 @@ def main():
                        help="Run only a specific test function")
     parser.add_argument("--include-main", action="store_true",
                        help="Also profile the main.py benchmark script")
-    parser.add_argument("--trainers", nargs="*", choices=["simple_trainer", "simple_trainer_2dgs"],
-                       help="Profile training scripts (simple_trainer, simple_trainer_2dgs)")
-    parser.add_argument("--trainer-data-dir", 
-                       help="Data directory for training (optional, uses trainer defaults if not specified)")
-    parser.add_argument("--trainer-args", nargs="*", default=[],
-                       help="Additional arguments to pass to trainer scripts (e.g., default, mcmc)")
     parser.add_argument("--summary-file", default="torch_prof/profiling_summary.json",
                        help="Output file for profiling summary")
     
@@ -273,36 +239,6 @@ def main():
                 "error": str(e)
             })
     
-    # Profile training scripts if requested
-    if args.trainers:
-        # Build trainer arguments - add trainer-specific args first, then data_dir if specified
-        trainer_args = list(args.trainer_args) if args.trainer_args else []
-        if args.trainer_data_dir:
-            trainer_args.append(f"data_dir={args.trainer_data_dir}")
-        
-        for trainer in args.trainers:
-            trainer_script = f"examples/{trainer}.py"
-            if not os.path.exists(trainer_script):
-                print(f"Warning: {trainer_script} not found, skipping...")
-                continue
-            
-            try:
-                trainer_result = run_trainer_with_profiling(trainer_script, trainer_args)
-                results.append(trainer_result)
-                
-                if not trainer_result["success"]:
-                    print(f"\nError running {trainer_script}:")
-                    print(f"Return code: {trainer_result['return_code']}")
-                    print(f"STDERR:\n{trainer_result['stderr']}")
-                    print(f"STDOUT:\n{trainer_result['stdout'][:500]}...")  # First 500 chars
-                    
-            except Exception as e:
-                print(f"\nError profiling {trainer_script}: {e}")
-                results.append({
-                    "file": trainer_script,
-                    "success": False,
-                    "error": str(e)
-                })
     
     # Generate summary
     summary = {
