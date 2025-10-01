@@ -54,7 +54,7 @@ Docker is the recommended method to set up your environment, as it avoids potent
 
    .. code-block:: bash
 
-      pip install gsplat --extra-index-url=https://pypi.amd.com/simple
+      pip install gsplat --index-url=https://pypi.amd.com/simple
 
 4. Verify the installation:
 

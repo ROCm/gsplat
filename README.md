@@ -8,11 +8,11 @@ This repository is the HIP port of the original `gsplat` project, optimized for 
 
 To use gsplat, you need the following prerequisites:
 
-- **ROCm**: version 6.4.1 or later (see `ROCm compatibility <https://rocm.docs.amd.com/en/latest/compatibility/compatibility-matrix.html>`__)
-- **Operating system**: Ubuntu 22.04 or later  
+- **ROCm**: version 6.4.3 (recommended)
+- **Operating system**: Ubuntu 24.04  
 - **GPU platform**: AMD Instinct™ MI300X  
-- **PyTorch**: version 2.6 or later (ROCm-enabled)  
-- **Python**: version 3.10 or later  
+- **PyTorch**: version 2.6 (ROCm-enabled)  
+- **Python**: version 3.12  
 
 ## Installation
 
@@ -32,7 +32,7 @@ To use gsplat, you need the following prerequisites:
 3. Install gsplat from the AMD-hosted PyPI repository:
 
    ```bash
-   pip install gsplat --extra-index-url=https://pypi.amd.com/simple
+   pip install gsplat --index-url=https://pypi.amd.com/simple
    ```
 
 4. Verify the installation:
