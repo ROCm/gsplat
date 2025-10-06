@@ -92,38 +92,3 @@ Thanks to gsplat’s optimized GPU implementation:
 
 ## Building from source
 Refer to the [installation instructions](docs/install/gsplat-install.rst) to learn how to build the gsplat library from source.
-
-## Contributing
-We welcome contributions of all kinds and are open to feedback, bug-reports, and improvements, to help expand the capabilities of this software. See [contributing to gsplat](docs/about/contribute-to-gsplat.rst) for more info.
-
-## Core Development
-
-This project is developed and maintained by the following contributors (unordered):  
-
-- [Angjoo Kanazawa](https://people.eecs.berkeley.edu/~kanazawa/) (UC Berkeley) – Mentor  
-- [Matthew Tancik](https://www.matthewtancik.com/about-me) (Luma AI) – Mentor  
-- [Vickie Ye](https://people.eecs.berkeley.edu/~vye/) (UC Berkeley) – Project Lead (v0.1)  
-- [Matias Turkulainen](https://maturk.github.io/) (Aalto University) – Core Developer  
-- [Ruilong Li](https://www.liruilong.cn/) (UC Berkeley) – Core Developer (v1.0 Lead)  
-- [Justin Kerr](https://kerrj.github.io/) (UC Berkeley) – Core Developer  
-- [Brent Yi](https://github.com/brentyi) (UC Berkeley) – Core Developer  
-- [Zhuoyang Pan](https://panzhy.com/) (ShanghaiTech University) – Core Developer  
-- [Jianbo Ye](http://www.jianboye.org/) (Amazon) – Core Developer  
-
-## Citation
-
-We also provide a white paper with benchmarks, mathematical derivations, and conventions: [arXiv link](https://arxiv.org/abs/2409.06765).  
-
-If you use this library in your research, please cite:
-
-```bibtex
-@article{ye2025gsplat,
-  title={gsplat: An open-source library for Gaussian splatting},
-  author={Ye, Vickie and Li, Ruilong and Kerr, Justin and Turkulainen, Matias and Yi, Brent and Pan, Zhuoyang and Seiskari, Otto and Ye, Jianbo and Hu, Jeffrey and Tancik, Matthew and Angjoo Kanazawa},
-  journal={Journal of Machine Learning Research},
-  volume={26},
-  number={34},
-  pages={1--17},
-  year={2025}
-}
-```
