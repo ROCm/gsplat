@@ -1505,7 +1505,7 @@ accumulate_2dgs
 Notes
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-1. This function requires the `Nerfacc <https://github.com/AMD-AIOSS/nerfacc>`__ package to be installed.
+1. This function requires the `nerfacc <https://github.com/nerfstudio-project/nerfacc>`__ package to be installed.
 
 
 .. _rasterization-2dgs-inria-wrapper:
