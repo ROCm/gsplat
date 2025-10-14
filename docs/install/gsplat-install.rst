@@ -164,7 +164,7 @@ The ``tests/`` folder provides automatic test scripts that verify if the GPU imp
 They primarily focus on validating the functionality of the Gaussian Splatting (GS) and 3D rendering components. 
 These tests ensure the correctness, performance, and stability of the core features implemented in the gsplat library.
 
-1. To run the tests, first install the `Nerfacc <https://github.com/nerfstudio-project/nerfacc>`__ dependency:
+1. To run the tests, first install the `nerfacc <https://github.com/nerfstudio-project/nerfacc>`__ dependency:
 
    .. code-block:: bash
 
