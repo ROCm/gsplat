@@ -1,74 +1,76 @@
-# gsplat
+# gsplat for ROCm
 
-[![Core Tests.](https://github.com/nerfstudio-project/gsplat/actions/workflows/core_tests.yml/badge.svg?branch=main)](https://github.com/nerfstudio-project/gsplat/actions/workflows/core_tests.yml)
-[![Docs](https://github.com/nerfstudio-project/gsplat/actions/workflows/doc.yml/badge.svg?branch=main)](https://github.com/nerfstudio-project/gsplat/actions/workflows/doc.yml)
+gsplat is an open-source library for GPU  accelerated rasterization of gaussians with python bindings. It is inspired by the SIGGRAPH paper [3D Gaussian Splatting for Real-Time Rendering of Radiance Fields](https://repo-sam.inria.fr/fungraph/3d-gaussian-splatting/).
 
-[http://www.gsplat.studio/](http://www.gsplat.studio/)
+This repo is the HIP port of the gsplat repo which is enabled and optimised for RCOM runing on AMD Instinct processors. 
 
-gsplat is an open-source library for CUDA accelerated rasterization of gaussians with python bindings. It is inspired by the SIGGRAPH paper [3D Gaussian Splatting for Real-Time Rendering of Radiance Fields](https://repo-sam.inria.fr/fungraph/3d-gaussian-splatting/), but we’ve made gsplat even faster, more memory efficient, and with a growing list of new features! 
+## System Requirements
+GSPLAT  for AMD ROCm™ 1.0.0 depends directly on NumPy and PyTorch for AMD ROCm™ with many optional dependencies
 
-<div align="center">
-  <video src="https://github.com/nerfstudio-project/gsplat/assets/10151885/64c2e9ca-a9a6-4c7e-8d6f-47eeacd15159" width="100%" />
-</div>
-
-## News
-
-[May 2025] Arbitrary batching (over multiple scenes and multiple viewpoints) is supported now!! Checkout [here](docs/batch.md) for more details! Kudos to [Junchen Liu](https://junchenliu77.github.io/).
-
-[May 2025] [Jonathan Stephens](https://x.com/jonstephens85) makes a great [tutorial video](https://www.youtube.com/watch?v=ACPTiP98Pf8) for Windows users on how to install gsplat and get start with 3DGUT.
-
-[April 2025] [NVIDIA 3DGUT](https://research.nvidia.com/labs/toronto-ai/3DGUT/) is now integrated in gsplat! Checkout [here](docs/3dgut.md) for more details. [[NVIDIA Tech Blog]](https://developer.nvidia.com/blog/revolutionizing-neural-reconstruction-and-rendering-in-gsplat-with-3dgut/) [[NVIDIA Sweepstakes]](https://www.nvidia.com/en-us/research/3dgut-sweepstakes/)
-
+- OS : Ubuntu 22.04 and above
+- ROCM Versions 6.4.1 and above
+- GPU Platforms : MI300X
+- Pytorch: 2.6 and above
+- Python : 3.12 and above.
+  
 ## Installation
 
-**Dependence**: Please install [Pytorch](https://pytorch.org/get-started/locally/) first.
+ - Install [Pytorch](https://pytorch.org/get-started/locally/) first. The easiet way is the use the official docker image which has pytorch for ROCm.
 
-The easiest way is to install from PyPI. In this way it will build the CUDA code **on the first run** (JIT).
+   Rocm 6.4
+    ```bash
+    docker run --cap-add=SYS_PTRACE --ipc=host --privileged=true   --shm-size=128GB --network=host --device=/dev/kfd  --device=/dev/dri --group-add video -it   -v $HOME:$HOME --name rocm/pytorch:rocm6.4.3_ubuntu24.04_py3.12_pytorch_release_2.6.0 
+    ```
 
-```bash
-pip install gsplat
-```
+   Rocm 7.0
+   ```bash
+   docker run --cap-add=SYS_PTRACE --ipc=host --privileged=true   --shm-size=128GB --network=host --device=/dev/kfd  --device=/dev/dri --group-add video -it   -v $HOME:$HOME --name rocm/pytorch:rocm7.0_ubuntu24.04_py3.12_pytorch_release_2.8.0
+   ```
+ 
+- Install the gsplat from the AMD hosted PYPI repoitory.
 
-Alternatively you can install gsplat from source. In this way it will build the CUDA code during installation.
-
-```bash
-pip install git+https://github.com/nerfstudio-project/gsplat.git
-```
-
-We also provide [pre-compiled wheels](https://docs.gsplat.studio/whl) for both linux and windows on certain python-torch-CUDA combinations (please check first which versions are supported). Note this way you would have to manually install [gsplat's dependencies](https://github.com/nerfstudio-project/gsplat/blob/6022cf45a19ee307803aaf1f19d407befad2a033/setup.py#L115). For example, to install gsplat for pytorch 2.0 and cuda 11.8 you can run
-```
-pip install ninja numpy jaxtyping rich
-pip install gsplat --index-url https://docs.gsplat.studio/whl/pt20cu118
-```
-
-To build gsplat from source on Windows, please check [this instruction](docs/INSTALL_WIN.md).
-
-## Evaluation
-
-This repo comes with a standalone script that reproduces the official Gaussian Splatting with exactly the same performance on PSNR, SSIM, LPIPS, and converged number of Gaussians. Powered by gsplat’s efficient CUDA implementation, the training takes up to **4x less GPU memory** with up to **15% less time** to finish than the official implementation. Full report can be found [here](https://docs.gsplat.studio/main/tests/eval.html).
-
-```bash
-cd examples
-pip install -r requirements.txt
-# download mipnerf_360 benchmark data
-python datasets/download_dataset.py
-# run batch evaluation
-bash benchmarks/basic.sh
-```
+    ```bash
+    pip install gsplat --extra-index-url=https://pypi.amd.com/simple
+    ```
+- Once the installation is sucessful, you can verify the installation using the pip show command
+  ```bash
+    pip show gsplat
+  ```
 
 ## Examples
 
-We provide a set of examples to get you started! Below you can find the details about
-the examples (requires to install some exta dependencies via `pip install -r examples/requirements.txt`)
+We provide a set of examples to get you started! Below you can find the details about the examples 
 
-- [Train a 3D Gaussian splatting model on a COLMAP capture.](https://docs.gsplat.studio/main/examples/colmap.html)
-- [Fit a 2D image with 3D Gaussians.](https://docs.gsplat.studio/main/examples/image.html)
-- [Render a large scene in real-time.](https://docs.gsplat.studio/main/examples/large_scale.html)
+- Get the examples folder from the github repo
+  ```bash
+  git clone --no-checkout https://github.com/rocm/gsplat.git && cd gsplat && git sparse-checkout init --cone
+  git sparse-checkout add examples && git checkout main
+  ```
+- Install the dependencies and download the test data set
+   ```bash 
+   cd examples
+   ./install_dependencies.sh
+   python datasets/download_dataset.py
+  ```
+- To run the examples refer to the docs below.
+  - [Fit a Single Image](https://amd.atlassian.net/wiki/spaces/DCGPUAIST/pages/1128163102/Fit+a+single+image)
+  
+  - [Fit a 2D image with 3D Gaussians.](https://amd.atlassian.net/wiki/spaces/DCGPUAIST/pages/1128134447/Fit+a+COLMAP+Capture)
+  
+  - [Render a large scene in real-time.](https://amd.atlassian.net/wiki/spaces/DCGPUAIST/pages/1128302047/Render+a+Large+Scene)
+
+## Evaluation
+
+This repo comes with a standalone script that reproduces the official Gaussian Splatting with exactly the same performance on PSNR, SSIM, LPIPS, and converged number of Gaussians. Powered by gsplat’s efficient GPU implementation, the training takes up to **4x less GPU memory** with up to **15% less time** to finish than the official implementation. Full report can be found [here](https://amd.atlassian.net/wiki/spaces/DCGPUAIST/pages/1115965044/Evaluation+Results+on+MI300).
+
+## Building from source
+Please checkout our [dev-setup](docs/DevSetup.md) documentation for instructions on how to build the gsplat library from source.
+
+## Contributing
+We welcome contributions of any kind and are open to feedback, bug-reports, and improvements to help expand the capabilities of this software. Please check [Contributing.md](docs/Contributing.md) for more info.
 
 
-## Development and Contribution
-
-This repository was born from the curiosity of people on the Nerfstudio team trying to understand a new rendering technique. We welcome contributions of any kind and are open to feedback, bug-reports, and improvements to help expand the capabilities of this software.
+## Core Development
 
 This project is developed by the following wonderful contributors (unordered):
 
@@ -95,5 +97,3 @@ We also have a white paper with about the project with benchmarking and mathemat
   year={2025}
 }
 ```
-
-We welcome contributions of any kind and are open to feedback, bug-reports, and improvements to help expand the capabilities of this software. Please check [docs/DEV.md](docs/DEV.md) for more info about development.

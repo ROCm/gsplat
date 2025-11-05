@@ -1,6 +1,10 @@
 #include <ATen/TensorUtils.h>
 #include <ATen/core/Tensor.h>
+#ifndef USE_ROCM
 #include <c10/cuda/CUDAGuard.h> // for DEVICE_GUARD
+#else
+#include <c10/hip/HIPGuard.h> // for DEVICE_GUARD
+#endif
 #include <tuple>
 
 #include <ATen/Functions.h>

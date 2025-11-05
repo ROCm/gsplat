@@ -1,9 +1,11 @@
 #include <ATen/Dispatch.h> // AT_DISPATCH_XXX
 #include <ATen/core/Tensor.h>
-#include <c10/cuda/CUDAStream.h> // at::cuda::getCurrentCUDAStream
 
 #include "Null.h"
-// #include "Utils.cuh" // optionally include some shared utility functions
+#include "Common.h"
+#include "Common.cuh"
+
+//#include "Utils.cuh" // optionally include some shared utility functions
 
 namespace gsplat {
 
@@ -55,7 +57,7 @@ void launch_null_kernel(const at::Tensor input, at::Tensor output) {
                 <<<grid,
                    threads,
                    shmem_size,
-                   at::cuda::getCurrentCUDAStream()>>>(
+                   GET_CURRENT_STREAM()>>>(
                     n_elements,
                     input.data_ptr<scalar_t>(),
                     output.data_ptr<scalar_t>(),

@@ -21,6 +21,8 @@ from gsplat_viewer import GsplatViewer, GsplatRenderTabState
 def main(local_rank: int, world_rank, world_size: int, args):
     torch.manual_seed(42)
     device = torch.device("cuda", local_rank)
+    test_data_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+                                      "assets", "test_garden.npz")
 
     if args.ckpt is None:
         (
@@ -33,7 +35,7 @@ def main(local_rank: int, world_rank, world_size: int, args):
             Ks,
             width,
             height,
-        ) = load_test_data(device=device, scene_grid=args.scene_grid)
+        ) = load_test_data(device=device, scene_grid=args.scene_grid,data_path=test_data_path)
 
         assert world_size <= 2
         means = means[world_rank::world_size].contiguous()

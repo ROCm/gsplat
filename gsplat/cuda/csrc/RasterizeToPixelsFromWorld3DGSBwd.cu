@@ -1,13 +1,16 @@
 #include <ATen/Dispatch.h>
 #include <ATen/core/Tensor.h>
-#include <ATen/cuda/Atomic.cuh>
-#include <c10/cuda/CUDAStream.h>
-#include <cooperative_groups.h>
 
 #include "Common.h"
+#include "Common.cuh"
 #include "Rasterization.h"
 #include "Utils.cuh"
 #include "Cameras.cuh"
+
+#define DEBUG_PRINT 0
+#ifdef DEBUG_PRINT
+#include <cstdio> // Only include cstdio if DEBUG_PRINT is enabled
+#endif
 
 namespace gsplat {
 
@@ -185,6 +188,13 @@ __global__ void rasterize_to_pixels_from_world_3dgs_bwd_kernel(
         reinterpret_cast<vec4 *>(&scale_batch[block_size]); // [block_size]
     float *rgbs_batch =
         (float *)&quat_batch[block_size]; // [block_size * CDIM]
+        
+    #if USE_ROCM
+    using warp_reduce_float_t = rocprim::warp_reduce<float,64>;
+    auto* warp_storage_base   =
+    (typename warp_reduce_float_t::storage_type*)
+        (rgbs_batch + block_size * CDIM);
+    #endif
 
     // this is the T AFTER the last gaussian in this pixel
     float T_final = 1.0f - render_alphas[pix_id];
@@ -205,9 +215,19 @@ __global__ void rasterize_to_pixels_from_world_3dgs_bwd_kernel(
     // collect and process batches of gaussians
     // each thread loads one gaussian at a time before rasterizing
     const uint32_t tr = block.thread_rank();
+    #if USE_ROCM
+    cg::thread_block_tile<64> warp = cg::tiled_partition<64>(block);
+    #else
     cg::thread_block_tile<32> warp = cg::tiled_partition<32>(block);
+    #endif
+
+    #if USE_ROCM
+    const int32_t warp_bin_final = reduce_max_shuffle(bin_final);
+    #else
     const int32_t warp_bin_final =
         cg::reduce(warp, bin_final, cg::greater<int>());
+    #endif
+
     for (uint32_t b = 0; b < num_batches; ++b) {
         // resync all threads before writing next batch of shared mem
         block.sync();
@@ -355,11 +375,19 @@ __global__ void rasterize_to_pixels_from_world_3dgs_bwd_kernel(
                     buffer[k] += rgbs_batch[t * CDIM + k] * fac;
                 }
             }
+            #if USE_ROCM
+            rocprim_warpSum<CDIM, 64>(v_rgb_local, warp_storage_base);   // CDIM-sized float array
+            rocprim_warpSum<64>(v_mean_local, warp_storage_base);        // vec3
+            rocprim_warpSum<64>(v_scale_local, warp_storage_base);       // vec3
+            rocprim_warpSum<64>(v_quat_local, warp_storage_base);        // vec4
+            rocprim_warpSum<64>(v_opacity_local, warp_storage_base);     // float
+            #else
             warpSum<CDIM>(v_rgb_local, warp);
             warpSum(v_mean_local, warp);
             warpSum(v_scale_local, warp);
             warpSum(v_quat_local, warp);
             warpSum(v_opacity_local, warp);
+            #endif
             if (warp.thread_rank() == 0) {
                 int32_t isect_id = id_batch[t]; // flatten index in [B * C * N] or [nnz]
                 int32_t isect_bid = isect_id / (C * N);   // intersection batch index
@@ -368,26 +396,26 @@ __global__ void rasterize_to_pixels_from_world_3dgs_bwd_kernel(
                 float *v_rgb_ptr = (float *)(v_colors) + CDIM * isect_id;
 #pragma unroll
                 for (uint32_t k = 0; k < CDIM; ++k) {
-                    gpuAtomicAdd(v_rgb_ptr + k, v_rgb_local[k]);
+                    unsafeAtomicAdd(v_rgb_ptr + k, v_rgb_local[k]);
                 }
 
                 float *v_mean_ptr = (float *)(v_means) + 3 * (isect_bid * N + isect_gid);
-                gpuAtomicAdd(v_mean_ptr, v_mean_local.x);
-                gpuAtomicAdd(v_mean_ptr + 1, v_mean_local.y);
-                gpuAtomicAdd(v_mean_ptr + 2, v_mean_local.z);
+                unsafeAtomicAdd(v_mean_ptr, v_mean_local.x);
+                unsafeAtomicAdd(v_mean_ptr + 1, v_mean_local.y);
+                unsafeAtomicAdd(v_mean_ptr + 2, v_mean_local.z);
 
                 float *v_scale_ptr = (float *)(v_scales) + 3 * (isect_bid * N + isect_gid);
-                gpuAtomicAdd(v_scale_ptr, v_scale_local.x);
-                gpuAtomicAdd(v_scale_ptr + 1, v_scale_local.y);
-                gpuAtomicAdd(v_scale_ptr + 2, v_scale_local.z);
+                unsafeAtomicAdd(v_scale_ptr, v_scale_local.x);
+                unsafeAtomicAdd(v_scale_ptr + 1, v_scale_local.y);
+                unsafeAtomicAdd(v_scale_ptr + 2, v_scale_local.z);
 
                 float *v_quat_ptr = (float *)(v_quats) + 4 * (isect_bid * N + isect_gid);
-                gpuAtomicAdd(v_quat_ptr, v_quat_local.x);
-                gpuAtomicAdd(v_quat_ptr + 1, v_quat_local.y);
-                gpuAtomicAdd(v_quat_ptr + 2, v_quat_local.z);
-                gpuAtomicAdd(v_quat_ptr + 3, v_quat_local.w);
+                unsafeAtomicAdd(v_quat_ptr, v_quat_local.x);
+                unsafeAtomicAdd(v_quat_ptr + 1, v_quat_local.y);
+                unsafeAtomicAdd(v_quat_ptr + 2, v_quat_local.z);
+                unsafeAtomicAdd(v_quat_ptr + 3, v_quat_local.w);
 
-                gpuAtomicAdd(v_opacities + isect_id, v_opacity_local);
+                unsafeAtomicAdd(v_opacities + isect_id, v_opacity_local);
             }
         }
     }
@@ -451,9 +479,16 @@ void launch_rasterize_to_pixels_from_world_3dgs_bwd_kernel(
     dim3 threads = {tile_size, tile_size, 1};
     dim3 grid = {I, tile_height, tile_width};
 
+    //rocPRIM shared memory allocation
+    const uint32_t block_size = tile_size * tile_size;
+    const uint32_t warps_per_block =
+        (block_size + 63) / 64;                       // for 64-lane warp
+    std::size_t warp_scratch_bytes =
+        warps_per_block * sizeof(typename rocprim::warp_reduce<float,64>::storage_type);
+
     int64_t shmem_size =
         tile_size * tile_size *
-        (sizeof(int32_t) + sizeof(vec4) + sizeof(vec3) + sizeof(vec4) + sizeof(float) * CDIM);
+        (sizeof(int32_t) + sizeof(vec4) + sizeof(vec3) + sizeof(vec4) + sizeof(float) * CDIM) + warp_scratch_bytes;
 
     if (n_isects == 0) {
         // skip the kernel launch if there are no elements
@@ -463,6 +498,7 @@ void launch_rasterize_to_pixels_from_world_3dgs_bwd_kernel(
     // TODO: an optimization can be done by passing the actual number of
     // channels into the kernel functions and avoid necessary global memory
     // writes. This requires moving the channel padding from python to C side.
+ #ifndef USE_ROCM
     if (cudaFuncSetAttribute(
             rasterize_to_pixels_from_world_3dgs_bwd_kernel<CDIM, float>,
             cudaFuncAttributeMaxDynamicSharedMemorySize,
@@ -474,9 +510,22 @@ void launch_rasterize_to_pixels_from_world_3dgs_bwd_kernel(
             " bytes), try lowering tile_size."
         );
     }
+#else
+    hipError_t err = hipFuncSetAttribute(
+        reinterpret_cast<void*>(rasterize_to_pixels_from_world_3dgs_bwd_kernel<CDIM,float>), // Cast to void*
+        hipFuncAttributeMaxDynamicSharedMemorySize,
+        static_cast<int>(shmem_size) // HIP requires int for shared memory size
+    );
+
+    if (err != hipSuccess) {
+        std::stringstream ss;
+        ss << "Failed to set maximum shared memory size (requested " << shmem_size << " bytes), try lowering tile_size.  HIP Error: " << hipGetErrorString(err);
+        throw std::runtime_error(ss.str());
+    }
+#endif
 
     rasterize_to_pixels_from_world_3dgs_bwd_kernel<CDIM, float>
-        <<<grid, threads, shmem_size, at::cuda::getCurrentCUDAStream()>>>(
+        <<<grid, threads, shmem_size, GET_CURRENT_STREAM()>>>(
             B,
             C,
             N,
@@ -590,3 +639,4 @@ __INS__(513)
 #undef __INS__
 
 } // namespace gsplat
+

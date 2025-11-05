@@ -1,6 +1,5 @@
 #include <ATen/TensorUtils.h>
 #include <ATen/core/Tensor.h>
-#include <c10/cuda/CUDAGuard.h> // for DEVICE_GUARD
 #include <tuple>
 
 #include <ATen/Functions.h>
@@ -12,6 +11,7 @@
 #include "Cameras.h"
 
 namespace gsplat {
+
 
 ////////////////////////////////////////////////////
 // 3DGS

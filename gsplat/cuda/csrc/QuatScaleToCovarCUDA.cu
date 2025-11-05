@@ -1,9 +1,9 @@
 #include <ATen/Dispatch.h>
 #include <ATen/core/Tensor.h>
-#include <c10/cuda/CUDAStream.h>
-#include <cooperative_groups.h>
+
 
 #include "Common.h"
+#include "Common.cuh"
 #include "QuatScaleToCovar.h"
 #include "Utils.cuh"
 
@@ -112,7 +112,7 @@ void launch_quat_scale_to_covar_preci_fwd_kernel(
                 <<<grid,
                    threads,
                    shmem_size,
-                   at::cuda::getCurrentCUDAStream()>>>(
+                   GET_CURRENT_STREAM()>>>(
                     N,
                     quats.data_ptr<scalar_t>(),
                     scales.data_ptr<scalar_t>(),
@@ -249,7 +249,7 @@ void launch_quat_scale_to_covar_preci_bwd_kernel(
                 <<<grid,
                    threads,
                    shmem_size,
-                   at::cuda::getCurrentCUDAStream()>>>(
+                   GET_CURRENT_STREAM()>>>(
                     N,
                     quats.data_ptr<scalar_t>(),
                     scales.data_ptr<scalar_t>(),

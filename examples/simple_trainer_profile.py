@@ -21,7 +21,7 @@ from datasets.traj import (
     generate_interpolated_path,
     generate_spiral_path,
 )
-from fused_ssim import fused_ssim
+# from fused_ssim import fused_ssim
 from torch import Tensor
 from torch.nn.parallel import DistributedDataParallel as DDP
 from torch.utils.tensorboard import SummaryWriter
@@ -39,6 +39,10 @@ from gsplat.strategy import DefaultStrategy, MCMCStrategy
 from gsplat_viewer import GsplatViewer, GsplatRenderTabState
 from nerfview import CameraState, RenderTabState, apply_float_colormap
 
+#for profiling
+import re
+import torch.profiler
+from contextlib import contextmanager
 
 @dataclass
 class Config:
@@ -207,6 +211,129 @@ class Config:
         else:
             assert_never(strategy)
 
+@contextmanager
+def profile_training(cfg: Config):
+    """
+    Context manager that profiles the training process using torch.profiler.
+    Profiling is only enabled if the environment variable ENABLE_PROFILER is set to "1".
+    """
+    # Check if the profiler is enabled via environment variable
+    if os.getenv("ENABLE_PROFILER") != "1":
+        yield None  # Proceed without profiling
+        return
+    
+    # Create a sanitized name for the log directory
+    dataset_name = os.path.basename(cfg.data_dir)
+    strategy_name = type(cfg.strategy).__name__.lower()
+    sanitized_name = f"training_{dataset_name}_{strategy_name}"
+    sanitized_name = re.sub(r'[:\[\]\-/]', '_', sanitized_name)
+    
+    # Define profiler activities
+    activities = [torch.profiler.ProfilerActivity.CPU]
+    if torch.cuda.is_available():
+        activities.append(torch.profiler.ProfilerActivity.CUDA)
+    
+    log_dir = f"./profiler_logs/{sanitized_name}"
+    os.makedirs(log_dir, exist_ok=True)
+    print(f"\n[Profiler] Enabled for training.")
+    print(f"[Profiler] Trace will be saved to '{log_dir}'")
+    
+    # Simple profiler wrapper
+    class SimpleProfiler:
+        def __init__(self):
+            self.profiler = None
+            self.step_count = 0
+            self.profiling_active = False
+            self.start_step = 100  # Start profiling after warmup
+            self.end_step = 200    # Profile for 100 steps
+            self.log_dir = log_dir
+            
+        def step(self):
+            self.step_count += 1
+            
+            # Start profiling
+            if self.step_count == self.start_step and not self.profiling_active:
+                print(f"[Profiler] Starting profiling at step {self.step_count}")
+                try:
+                    self.profiler = torch.profiler.profile(
+                        activities=activities,
+                        record_shapes=True,
+                        profile_memory=True,
+                    )
+                    self.profiler.__enter__()
+                    self.profiling_active = True
+                except Exception as e:
+                    print(f"[Profiler] Failed to start: {e}")
+                    self.profiling_active = False
+            
+            # Stop profiling
+            elif self.step_count >= self.end_step and self.profiling_active:
+                print(f"[Profiler] Stopping profiling at step {self.step_count}")
+                self._stop_and_save()
+                
+        def _stop_and_save(self):
+            if not self.profiling_active or not self.profiler:
+                return
+                
+            try:
+                # Stop profiler
+                self.profiler.__exit__(None, None, None)
+                self.profiling_active = False
+                
+                # Save results immediately and non-blocking
+                self._save_results_async()
+                
+            except Exception as e:
+                print(f"[Profiler] Error stopping profiler: {e}")
+                self.profiling_active = False
+                
+        def _save_results_async(self):
+            """Save results without blocking"""
+            try:
+                # Export chrome trace (most important)
+                trace_path = f"{self.log_dir}/trace.json"
+                self.profiler.export_chrome_trace(trace_path)
+                print(f"[Profiler] Chrome trace saved to: {trace_path}")
+                
+                # Try to get summary (but don't block if it fails)
+                try:
+                    key_averages = self.profiler.key_averages()
+                    if key_averages and len(key_averages) > 0:
+                        summary = key_averages.table(sort_by="cuda_time_total", row_limit=15)
+                        print(f"\n[Profiler] Top operations by CUDA time:")
+                        print(summary)
+                        
+                        # Save to file
+                        with open(f"{self.log_dir}/summary.txt", "w") as f:
+                            f.write(summary)
+                    else:
+                        print("[Profiler] No profiling data available for summary")
+                except Exception as e:
+                    print(f"[Profiler] Could not generate summary (trace still saved): {e}")
+                    
+            except Exception as e:
+                print(f"[Profiler] Error saving results: {e}")
+                
+        def cleanup(self):
+            """Force cleanup if still active"""
+            if self.profiling_active and self.profiler:
+                try:
+                    self.profiler.__exit__(None, None, None)
+                    self.profiling_active = False
+                    print("[Profiler] Forced cleanup completed")
+                except:
+                    pass
+    
+    profiler_wrapper = SimpleProfiler()
+    
+    try:
+        yield profiler_wrapper
+    finally:
+        # Ensure cleanup happens
+        profiler_wrapper.cleanup()
+        print(f"[Profiler] Training profiling completed.")
+        print(f"[Profiler] View results with: tensorboard --logdir={log_dir}")
+        print(f"[Profiler] Or open Chrome trace: {log_dir}/trace.json")
 
 def create_splats_with_optimizers(
     parser: Parser,
@@ -542,7 +669,7 @@ class Runner:
             render_colors[~masks] = 0
         return render_colors, render_alphas, info
 
-    def train(self):
+    def train(self,profiler=None):
         cfg = self.cfg
         device = self.device
         world_rank = self.world_rank
@@ -681,12 +808,12 @@ class Runner:
 
             # loss
             l1loss = F.l1_loss(colors, pixels)
-            ssimloss = 1.0 - fused_ssim(
-                colors.permute(0, 3, 1, 2), pixels.permute(0, 3, 1, 2), padding="valid"
-            )
-            # ssimloss = 1.0 - self.ssim(
-            #      colors.permute(0, 3, 1, 2), pixels.permute(0, 3, 1, 2)
+            # ssimloss = 1.0 - fused_ssim(
+            #     colors.permute(0, 3, 1, 2), pixels.permute(0, 3, 1, 2), padding="valid"
             # )
+            ssimloss = 1.0 - self.ssim(
+                 colors.permute(0, 3, 1, 2), pixels.permute(0, 3, 1, 2)
+            )
             loss = l1loss * (1.0 - cfg.ssim_lambda) + ssimloss * cfg.ssim_lambda
             if cfg.depth_loss:
                 # query depths from depth map
@@ -905,7 +1032,8 @@ class Runner:
                 # Update the scene.
                 self.viewer.update(step, num_train_rays_per_step)
 
-
+            if profiler is not None:
+                profiler.step()
 
 
         # After training completes, merge checkpoints across all ranks
@@ -1197,23 +1325,24 @@ def main(local_rank: int, world_rank, world_size: int, cfg: Config):
         if world_rank == 0:
             print("Viewer is disabled in distributed training.")
 
-    runner = Runner(local_rank, world_rank, world_size, cfg)
+    with profile_training(cfg) as prof:
+        runner = Runner(local_rank, world_rank, world_size, cfg)
 
-    if cfg.ckpt is not None:
-        # run eval only
-        ckpts = [
-            torch.load(file, map_location=runner.device, weights_only=True)
-            for file in cfg.ckpt
-        ]
-        for k in runner.splats.keys():
-            runner.splats[k].data = torch.cat([ckpt["splats"][k] for ckpt in ckpts])
-        step = ckpts[0]["step"]
-        runner.eval(step=step)
-        runner.render_traj(step=step)
-        if cfg.compression is not None:
-            runner.run_compression(step=step)
-    else:
-        runner.train()
+        if cfg.ckpt is not None:
+            # run eval only
+            ckpts = [
+                torch.load(file, map_location=runner.device, weights_only=True)
+                for file in cfg.ckpt
+            ]
+            for k in runner.splats.keys():
+                runner.splats[k].data = torch.cat([ckpt["splats"][k] for ckpt in ckpts])
+            step = ckpts[0]["step"]
+            runner.eval(step=step)
+            runner.render_traj(step=step)
+            if cfg.compression is not None:
+                runner.run_compression(step=step)
+        else:
+            runner.train(profiler=prof)
 
     if not cfg.disable_viewer:
         runner.viewer.complete()
@@ -1292,4 +1421,5 @@ if __name__ == "__main__":
         assert cfg.with_eval3d, "Training with UT requires setting `with_eval3d` flag."
 
     cli(main, cfg, verbose=True)
+
 

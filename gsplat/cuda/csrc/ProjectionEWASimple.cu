@@ -1,9 +1,8 @@
 #include <ATen/Dispatch.h>
 #include <ATen/core/Tensor.h>
-#include <c10/cuda/CUDAStream.h>
-#include <cooperative_groups.h>
 
 #include "Common.h"
+#include "Common.cuh"
 #include "Projection.h"
 #include "Utils.cuh"
 
@@ -109,7 +108,7 @@ void launch_projection_ewa_simple_fwd_kernel(
                 <<<grid,
                    threads,
                    shmem_size,
-                   at::cuda::getCurrentCUDAStream()>>>(
+                   GET_CURRENT_STREAM()>>>(
                     B,
                     C,
                     N,
@@ -271,7 +270,7 @@ void launch_projection_ewa_simple_bwd_kernel(
                 <<<grid,
                    threads,
                    shmem_size,
-                   at::cuda::getCurrentCUDAStream()>>>(
+                   GET_CURRENT_STREAM()>>>(
                     B,
                     C,
                     N,

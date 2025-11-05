@@ -1,10 +1,8 @@
 #include <ATen/Dispatch.h>
 #include <ATen/core/Tensor.h>
-#include <ATen/cuda/Atomic.cuh>
-#include <c10/cuda/CUDAStream.h>
-#include <cooperative_groups.h>
 
 #include "Common.h"
+#include "Common.cuh"
 #include "SphericalHarmonics.h"
 #include "Utils.cuh"
 
@@ -430,7 +428,7 @@ void launch_spherical_harmonics_fwd_kernel(
                 <<<grid,
                    threads,
                    shmem_size,
-                   at::cuda::getCurrentCUDAStream()>>>(
+                   GET_CURRENT_STREAM()>>>(
                     N,
                     K,
                     degrees_to_use,
@@ -478,9 +476,9 @@ __global__ void spherical_harmonics_bwd_kernel(
         v_dirs == nullptr ? nullptr : &v_dir
     );
     if (v_dirs != nullptr) {
-        gpuAtomicAdd(v_dirs + elem_id * 3, v_dir.x);
-        gpuAtomicAdd(v_dirs + elem_id * 3 + 1, v_dir.y);
-        gpuAtomicAdd(v_dirs + elem_id * 3 + 2, v_dir.z);
+        unsafeAtomicAdd(v_dirs + elem_id * 3, v_dir.x);
+        unsafeAtomicAdd(v_dirs + elem_id * 3 + 1, v_dir.y);
+        unsafeAtomicAdd(v_dirs + elem_id * 3 + 2, v_dir.z);
     }
 }
 
@@ -517,7 +515,7 @@ void launch_spherical_harmonics_bwd_kernel(
                 <<<grid,
                    threads,
                    shmem_size,
-                   at::cuda::getCurrentCUDAStream()>>>(
+                   GET_CURRENT_STREAM()>>>(
                     N,
                     K,
                     degrees_to_use,
@@ -535,3 +533,4 @@ void launch_spherical_harmonics_bwd_kernel(
 }
 
 } // namespace gsplat
+
