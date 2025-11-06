@@ -5,12 +5,12 @@ gsplat is an open-source library for GPU  accelerated rasterization of gaussians
 This repo is the HIP port of the gsplat repo which is enabled and optimised for RCOM runing on AMD Instinct processors. 
 
 ## System Requirements
-GSPLAT  for AMD ROCm™ 1.0.0 depends directly on NumPy and PyTorch for AMD ROCm™ with many optional dependencies
+GSPLAT  for AMD ROCm™ 1.5.3 depends directly on NumPy and PyTorch for AMD ROCm™ with many optional dependencies
 
-- OS : Ubuntu 22.04 and above
-- ROCM Versions 6.4.1 and above
-- GPU Platforms : MI300X
-- Pytorch: 2.6 and above
+- OS : Ubuntu 22.04 and Ubuntu 24.04
+- ROCM Versions 6.4 and 7.0
+- GPU Platforms : MI300, MI325, and MI350
+- Pytorch: 2.6, 2.7, and 2.8
 - Python : 3.12 and above.
   
 ## Installation
@@ -19,7 +19,8 @@ GSPLAT  for AMD ROCm™ 1.0.0 depends directly on NumPy and PyTorch for AMD ROCm
 
    Rocm 6.4
     ```bash
-    docker run --cap-add=SYS_PTRACE --ipc=host --privileged=true   --shm-size=128GB --network=host --device=/dev/kfd  --device=/dev/dri --group-add video -it   -v $HOME:$HOME --name rocm/pytorch:rocm6.4.3_ubuntu24.04_py3.12_pytorch_release_2.6.0 
+    docker run --cap-add=SYS_PTRACE --ipc=host --privileged=true   --shm-size=128GB --network=host --device=/dev/kfd  --device=/dev/dri --group-add video -it   -v $HOME:$HOME --name rocm/pytorch:rocm6.4.3_ubuntu22.04_py3.10_pytorch_release_2.6.0
+ 
     ```
 
    Rocm 7.0
