@@ -135,7 +135,7 @@ def get_git_rev(folder_path):
     except subprocess.CalledProcessError as e:
         # This error is raised if the command fails, which happens if 'main'
         # branch doesn't exist
-        print(f"Error: The #{branch_name} branch does not exist or another error occurred: {e}")
+        print(f"Error: Could not get git revision or another error occurred: {e}")
         return ""
     except FileNotFoundError:
         print("Error: Git is not installed or not in your system's PATH.")
@@ -147,7 +147,8 @@ def get_git_rev(folder_path):
 
 if is_git_repo:
     git_rev = get_git_rev(os.getcwd())
-    __version__ += f"+{git_rev}"
+    if git_rev:
+        __version__ += f"+{git_rev}"
 
 print(f"VERSION = {__version__}")
 
@@ -191,11 +192,11 @@ def get_extensions():
         undef_macros = []
         define_macros = []
 
-        extra_compile_args = {"cxx": ["-D__HIP_PLATFORM_AMD__" , "-Wno-sign-compare", "-DC10_CUDA_NO_CMAKE_CONFIGURE_FILE", "-DUSE_ROCM"]}
+        extra_compile_args = {"cxx": ["-D__HIP_PLATFORM_AMD__" , "-Wno-sign-compare", "-DC10_CUDA_NO_CMAKE_CONFIGURE_FILE", "-DUSE_ROCM", "-DGLM_FORCE_CUDA"]}
         if WITH_SYMBOLS:
             extra_compile_args["cxx"] += ["-g", "-O0"]
         else:
-            extra_compile_args = {"cxx": ["-O3", "-Wno-attributes", "-Wno-switch", "-Wno-comment"]}
+            extra_compile_args = {"cxx": ["-O3", "-Wno-attributes", "-Wno-switch", "-Wno-comment", "-DGLM_FORCE_CUDA"]}
 
         extra_link_args = ["-s"]
 
@@ -203,7 +204,7 @@ def get_extensions():
         extra_compile_args["cxx"] += ["-DAT_PARALLEL_OPENMP"]
         extra_compile_args["cxx"] += ["-fopenmp"]
 
-        hipcc_flags = [ "-D__HIP_PLATFORM_AMD__", "-DC10_CUDA_NO_CMAKE_CONFIGURE_FILE", "-DUSE_ROCM" , f"--offload-arch={gpu_arch}"]
+        hipcc_flags = [ "-D__HIP_PLATFORM_AMD__", "-DC10_CUDA_NO_CMAKE_CONFIGURE_FILE", "-DUSE_ROCM", "-DGLM_FORCE_CUDA", f"--offload-arch={gpu_arch}"]
         if WITH_SYMBOLS:
             hipcc_flags += ["-g", "-ggdb" , "-O0"]
         else:
