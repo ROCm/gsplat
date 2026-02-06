@@ -67,6 +67,8 @@ def rasterization(
     # rolling shutter
     rolling_shutter: RollingShutterType = RollingShutterType.GLOBAL,
     viewmats_rs: Optional[Tensor] = None,  # [..., C, 4, 4]
+    # language features (e.g. for LangSplat)
+    language_features: Optional[Tensor] = None,  # [..., N, D_lang]
 ) -> Tuple[Tensor, Tensor, Dict]:
     """Rasterize a set of 3D Gaussians (N) to a batch of image planes (C).
 
@@ -223,6 +225,12 @@ def rasterization(
         rolling_shutter: The rolling shutter type. Default `RollingShutterType.GLOBAL` means
             global shutter.
         viewmats_rs: The second viewmat when rolling shutter is used. Default is None.
+        language_features: Optional per-Gaussian language features (e.g. for LangSplat).
+            [..., N, D_lang]. When provided, these features are concatenated with colors
+            before rasterization and alpha-blended with the same transmittance. The rendered
+            language features are split back out and stored in ``meta["render_language_features"]``
+            with shape [..., C, height, width, D_lang]. When not provided (default None),
+            existing behavior is completely unchanged.
 
     Returns:
         A tuple:
@@ -230,11 +238,14 @@ def rasterization(
         **render_colors**: The rendered colors. [..., C, height, width, X].
         X depends on the `render_mode` and input `colors`. If `render_mode` is "RGB",
         X is D; if `render_mode` is "D" or "ED", X is 1; if `render_mode` is "RGB+D" or
-        "RGB+ED", X is D+1.
+        "RGB+ED", X is D+1. Note: when `language_features` is provided, the language
+        feature channels are **not** included in render_colors (they are in meta instead).
 
         **render_alphas**: The rendered alphas. [..., C, height, width, 1].
 
         **meta**: A dictionary of intermediate results of the rasterization.
+        If ``language_features`` is provided, ``meta["render_language_features"]`` contains
+        the rendered language features with shape [..., C, height, width, D_lang].
 
     Examples:
 
@@ -628,6 +639,40 @@ def rasterization(
     else:  # RGB
         pass
 
+    # Concatenate language features with colors if provided.
+    # Language features are alpha-blended with the same transmittance as colors,
+    # so they can be treated as additional color channels for rasterization.
+    # This MUST happen after the render_mode depth handling above so that
+    # language features are always at the end of the channel dimension.
+    _language_features_dim = None
+    if language_features is not None:
+        _language_features_dim = language_features.shape[-1]
+        if packed:
+            # Index language_features to match packed colors: [nnz, D_lang]
+            lf = language_features.reshape(B, N, _language_features_dim)[
+                batch_ids, gaussian_ids
+            ]
+        else:
+            # Broadcast to [..., C, N, D_lang]
+            lf = torch.broadcast_to(
+                language_features[..., None, :, :],
+                batch_dims + (C, N, _language_features_dim),
+            )
+        colors = torch.cat([colors, lf], dim=-1)
+        # Also pad backgrounds if provided
+        if backgrounds is not None:
+            backgrounds = torch.cat(
+                [
+                    backgrounds,
+                    torch.zeros(
+                        batch_dims + (C, _language_features_dim),
+                        device=device,
+                        dtype=backgrounds.dtype,
+                    ),
+                ],
+                dim=-1,
+            )
+
     # Identify intersecting tiles
     tile_width = math.ceil(width / float(tile_size))
     tile_height = math.ceil(height / float(tile_size))
@@ -757,6 +802,14 @@ def rasterization(
                 packed=packed,
                 absgrad=absgrad,
             )
+    # Split language features back out of render_colors if they were concatenated.
+    # This MUST happen before depth normalization because language features are
+    # appended at the end of the channel dimension (after any depth channel).
+    if _language_features_dim is not None:
+        render_language_features = render_colors[..., -_language_features_dim:]
+        render_colors = render_colors[..., :-_language_features_dim]
+        meta["render_language_features"] = render_language_features
+
     if render_mode in ["ED", "RGB+ED"]:
         # normalize the accumulated depth to get the expected depth
         render_colors = torch.cat(
