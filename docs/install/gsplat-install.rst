@@ -264,7 +264,34 @@ Build steps
 
       git clone --recurse-submodules https://github.com/rocm/gsplat.git
 
-2. Install the GLM dependency:
+2. Set up environment variables
+
+   .. code-block:: bash
+
+      if [ -z "$SYS_PREFIX" ]; then
+
+         SYS_PREFIX=$(python -c "import sys; print(sys.prefix)")
+
+      fi
+
+      export ROCM_PATH=$(python -m rocm_sdk path --root)
+      export ROCM_HOME=$ROCM_PATH
+      export HIP_PATH=$ROCM_PATH
+      export CMAKE_PREFIX_PATH="${SYS_PREFIX}:${CMAKE_PREFIX_PATH}"
+      export DEVICE_LIB_PATH="$ROCM_PATH/lib/llvm/amdgcn/bitcode"
+      export ROCM_DEVICE_LIB_PATH=$DEVICE_LIB_PATH
+      export HIP_DEVICE_LIB_PATH=$DEVICE_LIB_PATH
+      export LIBRARY_PATH=$ROCM_PATH/lib:$CONDA_PREFIX/lib:$LIBRARY_PATH
+      export LD_LIBRARY_PATH=$ROCM_PATH/lib:$CONDA_PREFIX/lib:$LD_LIBRARY_PATH
+      export PATH=$ROCM_PATH/bin:$PATH
+      
+      INC="$ROCM_PATH/include"
+      export CPLUS_INCLUDE_PATH="$INC:${CPLUS_INCLUDE_PATH:-}"
+      export CPATH="$INC:${CPATH:-}"
+      export CXXFLAGS="-isystem $INC ${CXXFLAGS:-}"
+      export CPPFLAGS="-isystem $INC ${CPPFLAGS:-}"
+
+3. Install the GLM dependency:
 
    .. code-block:: bash
 
@@ -277,20 +304,20 @@ Build steps
       cmake --build build -- all
       cmake --build build -- install
 
-3. Build the GSplat wheel:
+4. Build the GSplat wheel:
 
    .. code-block:: bash
 
       cd ../../../..
       python setup.py bdist_wheel
 
-4. Install the wheel:
+5. Install the wheel:
 
    .. code-block:: bash
 
       pip install dist/amd_gsplat*.whl
 
-5. Verify the installation:
+6. Verify the installation:
 
    .. code-block:: bash
 
