@@ -35,6 +35,7 @@ The GSplat public repository is located at `https://github.com/ROCm/gsplat <http
     * :doc:`GSplat API reference <reference/gsplat-api-reference>`
     * :doc:`Benchmarking <reference/benchmark-evaluation>`
     * :doc:`Profiling the library <reference/profile-gsplat-library>`
+    * :doc:`Debug int32 intersection overflow VM faults <how-to/debug-int32-intersection-overflow>`
 
 
 To contribute to the documentation, refer to :doc:`Contribute to GSplat <about/contribute-to-gsplat>`.
