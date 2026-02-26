@@ -1,6 +1,7 @@
 #include <ATen/TensorUtils.h>
 #include <ATen/core/Tensor.h>
 #include <tuple>
+#include <limits>
 
 #include <ATen/Functions.h>
 #include <ATen/NativeFunctions.h>
@@ -11,6 +12,38 @@
 #include "Cameras.h"
 
 namespace gsplat {
+
+namespace {
+
+inline void validate_intersection_int32_inputs(
+    const at::Tensor &tile_offsets,
+    const at::Tensor &flatten_ids,
+    const char *op_name
+) {
+    TORCH_CHECK(
+        tile_offsets.scalar_type() == at::kInt,
+        op_name,
+        ": tile_offsets must be int32."
+    );
+    TORCH_CHECK(
+        flatten_ids.scalar_type() == at::kInt,
+        op_name,
+        ": flatten_ids must be int32."
+    );
+
+    const int64_t n_isects = flatten_ids.numel();
+    TORCH_CHECK(
+        n_isects <= static_cast<int64_t>(std::numeric_limits<int32_t>::max()),
+        op_name,
+        ": flatten_ids length (",
+        n_isects,
+        ") exceeds int32 limit (",
+        std::numeric_limits<int32_t>::max(),
+        "); this overflows tile offsets and can cause GPU memory access faults."
+    );
+}
+
+} // namespace
 
 
 ////////////////////////////////////////////////////
@@ -46,6 +79,11 @@ std::tuple<at::Tensor, at::Tensor, at::Tensor> rasterize_to_pixels_3dgs_fwd(
     if (masks.has_value()) {
         CHECK_INPUT(masks.value());
     }
+    validate_intersection_int32_inputs(
+        tile_offsets,
+        flatten_ids,
+        "rasterize_to_pixels_3dgs_fwd"
+    );
 
     auto opt = means2d.options();
     at::DimVector image_dims(tile_offsets.sizes().slice(0, tile_offsets.dim() - 2));
@@ -156,6 +194,11 @@ rasterize_to_pixels_3dgs_bwd(
     if (masks.has_value()) {
         CHECK_INPUT(masks.value());
     }
+    validate_intersection_int32_inputs(
+        tile_offsets,
+        flatten_ids,
+        "rasterize_to_pixels_3dgs_bwd"
+    );
 
     uint32_t channels = colors.size(-1);
 
@@ -249,6 +292,11 @@ std::tuple<at::Tensor, at::Tensor> rasterize_to_indices_3dgs(
     CHECK_INPUT(opacities);
     CHECK_INPUT(tile_offsets);
     CHECK_INPUT(flatten_ids);
+    validate_intersection_int32_inputs(
+        tile_offsets,
+        flatten_ids,
+        "rasterize_to_indices_3dgs"
+    );
 
     auto opt = means2d.options();
     uint32_t N = means2d.size(-2); // number of gaussians
@@ -355,6 +403,11 @@ rasterize_to_pixels_2dgs_fwd(
     if (masks.has_value()) {
         CHECK_INPUT(masks.value());
     }
+    validate_intersection_int32_inputs(
+        tile_offsets,
+        flatten_ids,
+        "rasterize_to_pixels_2dgs_fwd"
+    );
     auto opt = means2d.options();
 
     at::DimVector image_dims(tile_offsets.sizes().slice(0, tile_offsets.dim() - 2));
@@ -515,6 +568,11 @@ rasterize_to_pixels_2dgs_bwd(
     if (masks.has_value()) {
         CHECK_INPUT(masks.value());
     }
+    validate_intersection_int32_inputs(
+        tile_offsets,
+        flatten_ids,
+        "rasterize_to_pixels_2dgs_bwd"
+    );
 
     uint32_t channels = colors.size(-1);
 
@@ -625,6 +683,11 @@ std::tuple<at::Tensor, at::Tensor> rasterize_to_indices_2dgs(
     CHECK_INPUT(opacities);
     CHECK_INPUT(tile_offsets);
     CHECK_INPUT(flatten_ids);
+    validate_intersection_int32_inputs(
+        tile_offsets,
+        flatten_ids,
+        "rasterize_to_indices_2dgs"
+    );
 
     auto opt = means2d.options();
     uint32_t N = means2d.size(-2); // number of gaussians
@@ -735,6 +798,11 @@ std::tuple<at::Tensor, at::Tensor, at::Tensor> rasterize_to_pixels_from_world_3d
     if (masks.has_value()) {
         CHECK_INPUT(masks.value());
     }
+    validate_intersection_int32_inputs(
+        tile_offsets,
+        flatten_ids,
+        "rasterize_to_pixels_from_world_3dgs_fwd"
+    );
     
     auto opt = means.options();
     at::DimVector batch_dims(means.sizes().slice(0, means.dim() - 2));
@@ -872,6 +940,11 @@ rasterize_to_pixels_from_world_3dgs_bwd(
     if (masks.has_value()) {
         CHECK_INPUT(masks.value());
     }
+    validate_intersection_int32_inputs(
+        tile_offsets,
+        flatten_ids,
+        "rasterize_to_pixels_from_world_3dgs_bwd"
+    );
 
     uint32_t channels = colors.size(-1);
 
