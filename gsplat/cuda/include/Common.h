@@ -11,7 +11,7 @@
 #include <c10/hip/CUDAGuard.h>
 #else
 #include <c10/hip/HIPStream.h> // at::hip::getCurrentHIPStream
-#include <c10/hip/HIPCachingAllocator.h>
+#include <c10/cuda/CUDACachingAllocator.h>
 #include <c10/hip/HIPStream.h>
 #include <c10/hip/HIPGuard.h>
 #include <c10/core/DeviceGuard.h>
@@ -38,7 +38,7 @@ namespace gsplat {
 // handle the temporary storage and 'twice' calls for cub API
 #else
 #define cub hipcub
-#define GET_CURRENT_STREAM() at::hip::getCurrentHIPStream()
+#define GET_CURRENT_STREAM() at::cuda::getCurrentCUDAStream()
 #define DEVICE_GUARD(_ten)
     //const c10::OptionalDeviceGuard device_guard(at::device_of(_ten));                                                   \
     const at::hip::OptionalHIPGuard device_guard(device_of(_ten));
