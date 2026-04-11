@@ -89,12 +89,12 @@ We provide a set of examples to get you started.
    cd gsplat
    git sparse-checkout init --cone
    git sparse-checkout add examples
-   git checkout main
    ```
 
 2. Install dependencies and download datasets:
 
    ```bash
+   git checkout release/1.5.3b2
    cd examples
    ./install_dependencies.sh
    python datasets/download_dataset.py
