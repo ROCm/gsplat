@@ -233,28 +233,25 @@ inline __device__ void manual_warpSum(float val[N]) {
     }  
 }
 
-// HIP-native warp reduction using shuffle (works on all wavefront sizes including RDNA3 32-wide)
 template<int LOGICAL_WARP_SIZE = 64>
 __device__ inline void rocprim_warpSum_scalar(float& val, typename rocprim::warp_reduce<float,LOGICAL_WARP_SIZE>::storage_type*
             warp_storage_base)
 {
-    unsigned long long warp_mask = __activemask();
-    
-    // Perform warp-level sum using shuffle
-    // Note: LOGICAL_WARP_SIZE reduction with wavefront-sized steps
-    #pragma unroll
-    for (int offset = LOGICAL_WARP_SIZE / 2; offset >= 32; offset /= 2) {
-        float other = __shfl_down_sync(warp_mask, val, offset);
-        val += other;
-    }
-    // Handle remaining reduction within wavefront
-    if (LOGICAL_WARP_SIZE > 32) {
-        float other = __shfl_down_sync(warp_mask, val, 32);
-        val += other;
-    }
-    
-    // Broadcast result from lane 0 to all threads in warp
-    val = __shfl_sync(warp_mask, val, 0);
+    using warp_reduce_t = rocprim::warp_reduce<float, LOGICAL_WARP_SIZE>;
+    //constexpr int NUM_WARPS = BLOCK_SIZE / LOGICAL_WARP_SIZE;
+
+    // One storage object per logical warp inside the block
+    // __shared__ typename warp_reduce_t::storage_type
+    //     warp_storage[NUM_WARPS];
+
+    const int warp_id = threadIdx.x / LOGICAL_WARP_SIZE;
+    warp_reduce_t wreduce;
+    float sum;
+    wreduce.reduce(val,                       
+                   sum,
+                   warp_storage_base[warp_id],    
+                   rocprim::plus<float>());
+    val = sum;
 }
 
 //-----------------------------------------------------------------------------

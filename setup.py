@@ -16,43 +16,43 @@ __version__ = None
 exec(open("gsplat/version.py", "r").read())
 import subprocess
 
-
 def get_rocm_arch():
     """
     Runs rocminfo and extracts the GPU architecture (gfx code).
-
+    
     Returns:
         str: The gfx code (e.g., 'gfx942', 'gfx90a'), or 'gfx942' as fallback.
     """
     try:
         # Run rocminfo command
         result = subprocess.run(
-            ["rocminfo"], capture_output=True, text=True, check=True
+            ['rocminfo'],
+            capture_output=True,
+            text=True,
+            check=True
         )
-
+        
         # Parse the output to find the gfx architecture
         # Look for lines like "Name:                    gfx942"
         output = result.stdout
-
+        
         # Search for gfx code pattern
-        match = re.search(r"Name:\s+(gfx[0-9a-z]+)", output)
+        match = re.search(r'Name:\s+(gfx[0-9a-z]+)', output)
         if match:
             gfx_code = match.group(1)
             print(f"Detected ROCm GPU architecture: {gfx_code}")
             return gfx_code
-
+        
         # Alternative pattern: sometimes it appears as "gfxXXX" directly
-        match = re.search(r"\b(gfx[0-9a-z]+)\b", output)
+        match = re.search(r'\b(gfx[0-9a-z]+)\b', output)
         if match:
             gfx_code = match.group(1)
             print(f"Detected ROCm GPU architecture: {gfx_code}")
             return gfx_code
-
-        print(
-            "Warning: Could not detect GPU architecture from rocminfo, using default gfx942"
-        )
+            
+        print("Warning: Could not detect GPU architecture from rocminfo, using default gfx942")
         return "gfx942"
-
+        
     except subprocess.CalledProcessError as e:
         print(f"Error running rocminfo: {e}")
         print("Using default architecture: gfx942")
@@ -65,7 +65,6 @@ def get_rocm_arch():
         print(f"Unexpected error getting ROCm architecture: {e}")
         print("Using default architecture: gfx942")
         return "gfx942"
-
 
 def is_git_repo(folder_path):
     """
@@ -84,10 +83,10 @@ def is_git_repo(folder_path):
     try:
         # Run the git command
         result = subprocess.run(
-            ["git", "rev-parse", "--git-dir"],
+            ['git', 'rev-parse', '--git-dir'],
             cwd=folder_path,
             capture_output=True,
-            text=True,
+            text=True
         )
 
         # The command returns an exit code of 0 if it's a repo
@@ -101,7 +100,6 @@ def is_git_repo(folder_path):
         # Handle other unexpected errors
         print(f"An unexpected error occurred: {e}")
         return False
-
 
 def get_git_rev(folder_path):
     """
@@ -119,11 +117,15 @@ def get_git_rev(folder_path):
         # Use subprocess to run 'git rev-parse main' to get the commit hash
         # 'rev-parse' is a low-level command used to translate a human-readable
         # name into an SHA-1.
-        command = ["git", "rev-parse", "--short", "HEAD"]
+        command = ['git', 'rev-parse', '--short' ,"HEAD"]
 
         # Run the command in the specified folder
         result = subprocess.run(
-            command, cwd=folder_path, capture_output=True, text=True, check=True
+            command,
+            cwd=folder_path,
+            capture_output=True,
+            text=True,
+            check=True
         )
 
         # The output is the commit hash
@@ -133,9 +135,7 @@ def get_git_rev(folder_path):
     except subprocess.CalledProcessError as e:
         # This error is raised if the command fails, which happens if 'main'
         # branch doesn't exist
-        print(
-            f"Error: The #{branch_name} branch does not exist or another error occurred: {e}"
-        )
+        print(f"Error: The #{branch_name} branch does not exist or another error occurred: {e}")
         return ""
     except FileNotFoundError:
         print("Error: Git is not installed or not in your system's PATH.")
@@ -144,7 +144,6 @@ def get_git_rev(folder_path):
         print(f"An unexpected error occurred: {e}")
         return ""
     return ""
-
 
 if is_git_repo:
     git_rev = get_git_rev(os.getcwd())
@@ -155,7 +154,7 @@ print(f"VERSION = {__version__}")
 URL = "https://github.com/rocm/gsplat"
 
 BUILD_NO_CUDA = os.getenv("BUILD_NO_CUDA", "0") == "1"
-WITH_SYMBOLS = os.getenv("WITH_SYMBOLS", "0") == "1"
+WITH_SYMBOLS =  os.getenv("WITH_SYMBOLS", "0") == "1"
 LINE_INFO = os.getenv("LINE_INFO", "0") == "1"
 
 ENABLE_TEST_COVERAGE = os.getenv("ENABLE_TEST_COVERAGE", "0") == "1"
@@ -167,20 +166,16 @@ if not MAX_JOBS:
     os.environ["MAX_JOBS"] = "10"
     print(f"Setting MAX_JOBS to {os.environ['MAX_JOBS']}")
 
-
 def get_ext():
     from torch.utils.cpp_extension import BuildExtension
-
     return BuildExtension.with_options(no_python_abi_suffix=True, use_ninja=True)
 
 
 def get_extensions():
     if IS_ROCM:
         from torch.utils.cpp_extension import CUDAExtension
-
         print("ROCM detected, compiling with HIP support...")
         from torch.utils.cpp_extension import CppExtension
-
         # Get the GPU architecture dynamically
         gpu_arch = get_rocm_arch()
         print(f"gpu arch is set to {gpu_arch}")
@@ -189,29 +184,18 @@ def get_extensions():
         conda_pip_packages = f"{conda_lib_path}/python3.11/site-packages"
 
         # Use relative path instead of hardcoded absolute path
-        extensions_dir = osp.join("gsplat", "cuda")
-        sources = glob.glob(osp.join(extensions_dir, "csrc", "*.cu")) + glob.glob(
-            osp.join(extensions_dir, "csrc", "*.cpp")
-        )
+        extensions_dir = osp.join("gsplat","cuda")
+        sources = glob.glob(osp.join(extensions_dir, "csrc", "*.cu")) + glob.glob(osp.join(extensions_dir, "csrc", "*.cpp"))
         sources += [osp.join(extensions_dir, "ext.cpp")]
 
         undef_macros = []
         define_macros = []
 
-        extra_compile_args = {
-            "cxx": [
-                "-D__HIP_PLATFORM_AMD__",
-                "-Wno-sign-compare",
-                "-DC10_CUDA_NO_CMAKE_CONFIGURE_FILE",
-                "-DUSE_ROCM",
-            ]
-        }
+        extra_compile_args = {"cxx": ["-D__HIP_PLATFORM_AMD__" , "-Wno-sign-compare", "-DC10_CUDA_NO_CMAKE_CONFIGURE_FILE", "-DUSE_ROCM"]}
         if WITH_SYMBOLS:
             extra_compile_args["cxx"] += ["-g", "-O0"]
         else:
-            extra_compile_args = {
-                "cxx": ["-O3", "-Wno-attributes", "-Wno-switch", "-Wno-comment"]
-            }
+            extra_compile_args = {"cxx": ["-O3", "-Wno-attributes", "-Wno-switch", "-Wno-comment"]}
 
         extra_link_args = ["-s"]
 
@@ -219,20 +203,11 @@ def get_extensions():
         extra_compile_args["cxx"] += ["-DAT_PARALLEL_OPENMP"]
         extra_compile_args["cxx"] += ["-fopenmp"]
 
-        hipcc_flags = [
-            "-D__HIP_PLATFORM_AMD__",
-            "-DC10_CUDA_NO_CMAKE_CONFIGURE_FILE",
-            "-DUSE_ROCM",
-            f"--offload-arch={gpu_arch}",
-            "-DROCPRIM_TARGET_RDNA3=1",
-            "-DROCPRIM_WARP_SIZE_32=32",
-            "-DROCPRIM_WARP_SIZE_64=64",
-            "-DROCPRIM_MAX_WARP_SIZE=32",
-        ]
+        hipcc_flags = [ "-D__HIP_PLATFORM_AMD__", "-DC10_CUDA_NO_CMAKE_CONFIGURE_FILE", "-DUSE_ROCM" , f"--offload-arch={gpu_arch}"]
         if WITH_SYMBOLS:
-            hipcc_flags += ["-g", "-ggdb", "-O0"]
+            hipcc_flags += ["-g", "-ggdb" , "-O0"]
         else:
-            hipcc_flags += ["-O3"]
+            hipcc_flags += ["-O3" ]
         if LINE_INFO:
             hipcc_flags += ["-gline-tables-only"]
         if torch.version.hip:
@@ -241,16 +216,11 @@ def get_extensions():
             define_macros += [("USE_ROCM", "1")]
             undef_macros += ["__HIP_NO_HALF_CONVERSIONS__"]
         if ENABLE_TEST_COVERAGE:
-            extra_compile_args["cxx"] += [
-                "-fprofile-instr-generate",
-                "-fcoverage-mapping",
-                "-Qunused-arguments",
-                "--gcc-toolchain=/usr",
-            ]
-            hipcc_flags += ["-fprofile-instr-generate", "-fcoverage-mapping"]
-            extra_link_args += ["-fprofile-instr-generate"]
-
-        # Its still nvcc flags that are used for HIP compilation
+            extra_compile_args['cxx'] += ['-fprofile-instr-generate', '-fcoverage-mapping', '-Qunused-arguments', '--gcc-toolchain=/usr']
+            hipcc_flags += ['-fprofile-instr-generate', '-fcoverage-mapping']
+            extra_link_args += ['-fprofile-instr-generate']
+	
+	# Its still nvcc flags that are used for HIP compilation
         extra_compile_args["nvcc"] = hipcc_flags
         current_dir = pathlib.Path(__file__).parent.resolve()
 
@@ -270,10 +240,11 @@ def get_extensions():
             define_macros=define_macros,
             undef_macros=undef_macros,
             extra_compile_args=extra_compile_args,
-            extra_link_args=extra_link_args,
+            extra_link_args=extra_link_args
         )
         return [extension]
     else:
+
         from torch.__config__ import parallel_info
         from torch.utils.cpp_extension import CUDAExtension
 
@@ -344,9 +315,7 @@ def get_extensions():
         )
         return [extension]
 
-
 import torch.utils.cpp_extension as ce
-
 
 def fixed_get_compiler_abi_compatibility_and_version(compiler):
     try:
@@ -355,14 +324,9 @@ def fixed_get_compiler_abi_compatibility_and_version(compiler):
         # Fallback for clang++ "17.0git"
         return ("gcc", (17, 0))
 
-
 if not hasattr(ce, "original_get_compiler_abi_compatibility_and_version"):
-    ce.original_get_compiler_abi_compatibility_and_version = (
-        ce.get_compiler_abi_compatibility_and_version
-    )
-    ce.get_compiler_abi_compatibility_and_version = (
-        fixed_get_compiler_abi_compatibility_and_version
-    )
+    ce.original_get_compiler_abi_compatibility_and_version = ce.get_compiler_abi_compatibility_and_version
+    ce.get_compiler_abi_compatibility_and_version = fixed_get_compiler_abi_compatibility_and_version
 
 
 setup(
@@ -371,7 +335,7 @@ setup(
     description=" Python package for differentiable rasterization of gaussians",
     keywords="gaussian, splatting, cuda",
     url=URL,
-    author="AMD Corporation",
+	author="AMD Corporation",
     license="Apache 2.0",
     python_requires=">=3.7",
     install_requires=[
