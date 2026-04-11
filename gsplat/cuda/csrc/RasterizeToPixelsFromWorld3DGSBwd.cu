@@ -482,7 +482,7 @@ void launch_rasterize_to_pixels_from_world_3dgs_bwd_kernel(
     //rocPRIM shared memory allocation
     const uint32_t block_size = tile_size * tile_size;
     const uint32_t warps_per_block =
-        (block_size + 31) / 32;                       // for 64-lane warp
+        (block_size + 31) / 32;                       // for 32-lane wave
     std::size_t warp_scratch_bytes =
         warps_per_block * sizeof(typename rocprim::warp_reduce<float,32>::storage_type);
 

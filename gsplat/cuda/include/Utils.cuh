@@ -244,7 +244,10 @@ __device__ inline void rocprim_warpSum_scalar(float& val, typename rocprim::warp
     // __shared__ typename warp_reduce_t::storage_type
     //     warp_storage[NUM_WARPS];
 
-    const int warp_id = threadIdx.x / LOGICAL_WARP_SIZE;
+    // Use flat thread ID to correctly index per-warp shared storage.
+    // threadIdx.x alone is wrong for 2D thread blocks (e.g. tile_size=16
+    // gives blockDim=(16,16,1), so threadIdx.x only ranges 0..15).
+    const int warp_id = (threadIdx.x + threadIdx.y * blockDim.x + threadIdx.z * blockDim.x * blockDim.y) / LOGICAL_WARP_SIZE;
     warp_reduce_t wreduce;
     float sum;
     wreduce.reduce(val,                       
