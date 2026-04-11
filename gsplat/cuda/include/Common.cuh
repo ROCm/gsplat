@@ -38,7 +38,7 @@ namespace gsplat {
     do {                                                                       \
         size_t temp_storage_bytes = 0;                                         \
         auto res = func(nullptr, temp_storage_bytes, __VA_ARGS__);                        \
-        auto &caching_allocator = *::c10::hip::HIPCachingAllocator::get();   \
+        auto &caching_allocator = *::c10::cuda::CUDACachingAllocator::get();   \
         auto temp_storage = caching_allocator.allocate(temp_storage_bytes);    \
         res = func(temp_storage.get(), temp_storage_bytes, __VA_ARGS__);  \
 	assert(res == hipSuccess);                                            \
