@@ -21,7 +21,7 @@ def get_rocm_arches():
     Resolves ROCm GPU architectures for hipcc offloading.
 
     Returns:
-        list[str]: gfx architecture list (for example ['gfx1151', 'gfx1100']).
+        List[str]: gfx architecture list (for example ['gfx1151', 'gfx1100']).
     """
     env_arch = os.environ.get("PYTORCH_ROCM_ARCH", "").strip()
     if env_arch:
