@@ -78,19 +78,33 @@ To use GSplat, you need the following prerequisites:
     Requires: jaxtyping, ninja, numpy, rich, torch
 
 
-6. For source builds, set explicit ROCm targets when building for gfx11 hardware:
+6. For source builds, set explicit ROCm targets when building for gfx11 (RDNA3) hardware:
 
    ```bash
    export PYTORCH_ROCM_ARCH=gfx1100,gfx1151
    ```
 
-7. Optional containerized smoke path for gfx11:
+7. Docker build for gfx11 (RDNA3 / Strix Halo) with full HIP compilation:
 
    ```bash
-   docker build -f docker/Dockerfile.rocm-gfx11 --build-arg BUILD_WITH_HIP=1 -t gsplat-rocm-gfx11 .
+   docker build -f docker/Dockerfile.rocm-gfx11 \
+     --build-arg BUILD_WITH_HIP=1 \
+     -t gsplat-rocm-gfx11 .
    docker run --rm --device=/dev/kfd --device=/dev/dri --group-add video gsplat-rocm-gfx11 \
      python -c "import torch, gsplat; print(torch.cuda.is_available(), gsplat.__version__)"
    ```
+
+   > **Note for gfx1100/gfx1151**: These GPUs use a wave32 (32-lane) SIMD, unlike
+   > larger AMD GPUs which use wave64. This branch includes the necessary patches:
+   > - `LOGICAL_WARP_SIZE=32` throughout warp-level primitives
+   > - `cg::thread_block_tile<32>` and `rocprim::warp_reduce<float,32>` usage
+   > - Corrected warp shuffle masks at compile time via `__AMDGCN_WAVEFRONT_SIZE`
+   >
+   > Additionally, GLM's `glm/simd/platform.h` has the HIP detection block moved
+   > **before** the CUDA block. This prevents PyTorch's ROCm hipification
+   > (which converts `__CUDACC__` → `__HIP__`) from shadowing the native HIP
+   > compiler path, which would otherwise cause a `"GLM requires CUDA 7.0 or higher"`
+   > build failure.
 
 
 ## Examples

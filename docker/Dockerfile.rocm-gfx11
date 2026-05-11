@@ -17,13 +17,18 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 WORKDIR /workspace/gsplat
 COPY . /workspace/gsplat
 
+# Initialize GLM submodule and apply HIP platform patch
+RUN git submodule update --init --recursive && \
+    python3 docker/patch_glm_platform_h.py && \
+    echo "GLM patched successfully"
+
 # BUILD_WITH_HIP=0 keeps CI smoke lightweight; set BUILD_WITH_HIP=1 on ROCm hosts.
 ARG BUILD_WITH_HIP=0
 RUN python -m pip install --no-cache-dir --upgrade pip setuptools wheel && \
     if [ "${BUILD_WITH_HIP}" = "1" ]; then \
-      MAX_JOBS=4 python -m pip install --no-cache-dir .; \
+      MAX_JOBS=4 python -m pip install --no-cache-dir --no-build-isolation .; \
     else \
-      BUILD_NO_CUDA=1 python -m pip install --no-cache-dir .; \
+      BUILD_NO_CUDA=1 python -m pip install --no-cache-dir --no-build-isolation .; \
     fi
 
 CMD ["bash"]
