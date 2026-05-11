@@ -5,7 +5,6 @@ import pathlib
 import platform
 import sys
 import re
-import shutil
 
 from setuptools import find_packages, setup
 
@@ -170,6 +169,7 @@ def get_ext():
 
 def get_extensions():
     if IS_ROCM:
+        import shutil
         import torch
         from torch.utils.cpp_extension import CUDAExtension
 
@@ -240,8 +240,8 @@ def get_extensions():
         current_dir = pathlib.Path(__file__).parent.resolve()
 
         include_dirs = [
-            osp.join(current_dir, "gsplat", "cuda", "csrc", "third_party", "glm"),
             osp.join(current_dir, "gsplat", "cuda", "include"),
+            osp.join(current_dir, "gsplat", "cuda", "csrc", "third_party", "glm"),
             f"{os.environ['HOME']}/.local/include",
             f"/opt/conda/include",
             f"/opt/conda/envs/py_3.12/lib/python3.12/site-packages/",

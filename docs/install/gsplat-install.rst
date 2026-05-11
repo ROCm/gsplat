@@ -328,9 +328,9 @@ These tests ensure the correctness, performance, and stability of the core featu
    .. code-block:: bash
 
       cd tests
-       pytest -s -v test_2dgs.py::test_fully_fused_projection_packed_2dgs
-       pytest -s -v test_2dgs.py
-       pytest -s -v test_basic.py
+      pytest -s -v test_2dgs.py::test_fully_fused_projection_packed_2dgs
+      pytest -s -v test_2dgs.py
+      pytest -s -v test_basic.py
 
 3. Minimal runtime smoke test on a gfx1151/gfx1100 machine:
 
