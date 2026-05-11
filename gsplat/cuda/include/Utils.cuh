@@ -156,8 +156,11 @@ inline __device__ int get_leader_lane_id(unsigned long long mask) {
 // or for specific performance tuning, though `labeled_partition` is generally efficient.
 
 inline __device__ int32_t reduce_max_shuffle(int32_t val) {
-    const unsigned long long mask =
-        (warpSize == 32) ? 0xFFFFFFFFULL : 0xFFFFFFFFFFFFFFFFULL;
+#if defined(__AMDGCN_WAVEFRONT_SIZE) && __AMDGCN_WAVEFRONT_SIZE == 32
+    const unsigned long long mask = 0xFFFFFFFFULL;
+#else
+    const unsigned long long mask = 0xFFFFFFFFFFFFFFFFULL;
+#endif
 
     #pragma unroll
     for (int offset = warpSize / 2; offset > 0; offset /= 2) {
