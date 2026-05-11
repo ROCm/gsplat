@@ -15,7 +15,7 @@ To use GSplat (Gaussian splatting) `1.5.3b2 <https://github.com/ROCm/gsplat/tree
 
 - **ROCm version:** `6.4.3 <https://repo.radeon.com/rocm/apt/6.4.3/>`__ , `7.0.0 <https://repo.radeon.com/rocm/apt/7.0/>`__ (recommended)
 - **Operating system:** Ubuntu 22.04, 24.04
-- **GPU platforms:** AMD Instinct™ MI325X, MI300X
+- **GPU platforms:** AMD Instinct™ MI325X/MI300X, Radeon™ RX 7900 series (gfx1100), Ryzen™ AI Max/Strix Halo (gfx1151)
 - **PyTorch:** `2.6 <https://github.com/ROCm/pytorch/tree/v2.6.0>`__, `2.8 <https://github.com/ROCm/pytorch/tree/v2.8.0>`__ (ROCm-enabled)
 - **Python:** `3.10 <https://www.python.org/downloads/release/python-3100/>`__, `3.12 <https://www.python.org/downloads/release/python-3120/>`__ 
 
@@ -235,13 +235,12 @@ Before building GSplat from source, ensure you have one of the following install
 
       rocminfo | grep gfx
 
-2. The output should be as follows: 
+2. The output should include your target architecture (for example ``gfx942``, ``gfx1100``, or ``gfx1151``), for example: 
 
    .. code-block:: bash
 
-      Name:                    gfx942
-            Name:                    amdgcn-amd-amdhsa--gfx942:sramecc+:xnack-
-            Name:                    amdgcn-amd-amdhsa--gfx9-4-generic:sramecc+:xnack-
+      Name:                    gfx1151
+            Name:                    amdgcn-amd-amdhsa--gfx1151
 
 3. Confirm that PyTorch is installed and accessible:
 
@@ -254,6 +253,12 @@ Before building GSplat from source, ensure you have one of the following install
    .. code-block:: bash
 
       python3 -c 'import torch; print(torch.cuda.is_available())'
+
+5. If you are building wheels for multiple ROCm targets (for example datacenter and gfx11 devices), set:
+
+   .. code-block:: bash
+
+      export PYTORCH_ROCM_ARCH=gfx942,gfx1100,gfx1151
 
 Build steps
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -283,6 +288,12 @@ Build steps
 
       cd ../../../..
       python setup.py bdist_wheel
+
+   To force gfx11-only compilation during local builds:
+
+   .. code-block:: bash
+
+      PYTORCH_ROCM_ARCH=gfx1100,gfx1151 python setup.py bdist_wheel
 
 4. Install the wheel:
 
@@ -317,9 +328,16 @@ These tests ensure the correctness, performance, and stability of the core featu
    .. code-block:: bash
 
       cd tests
-      pytest -s -v test_2dgs.py::test_fully_fused_projection_packed_2dgs
-      pytest -s -v test_2dgs.py
-      pytest -s -v test_basic.py
+       pytest -s -v test_2dgs.py::test_fully_fused_projection_packed_2dgs
+       pytest -s -v test_2dgs.py
+       pytest -s -v test_basic.py
+
+3. Minimal runtime smoke test on a gfx1151/gfx1100 machine:
+
+   .. code-block:: bash
+
+      python -c "import torch, gsplat; print(torch.cuda.is_available(), gsplat.__version__)"
+      python -c "import os; print('PYTORCH_ROCM_ARCH=', os.getenv('PYTORCH_ROCM_ARCH'))"
 
 Run a GSplat example
 ====================================================================

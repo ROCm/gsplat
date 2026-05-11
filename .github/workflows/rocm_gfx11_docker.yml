@@ -1,0 +1,39 @@
+name: ROCm gfx11 Docker Smoke
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  docker-smoke:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Build gfx11 Docker image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: docker/Dockerfile.rocm-gfx11
+          push: false
+          load: true
+          tags: gsplat-rocm-gfx11:ci
+          build-args: |
+            BUILD_WITH_HIP=0
+
+      - name: Container smoke test
+        run: |
+          docker run --rm gsplat-rocm-gfx11:ci python - <<'PY'
+          import os
+          import gsplat
+          print('gsplat version:', gsplat.__version__)
+          print('PYTORCH_ROCM_ARCH:', os.environ.get('PYTORCH_ROCM_ARCH'))
+          PY

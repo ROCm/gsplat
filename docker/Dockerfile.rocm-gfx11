@@ -1,0 +1,29 @@
+ARG BASE_IMAGE=rocm/pytorch:rocm7.0_ubuntu24.04_py3.12_pytorch_release_2.8.0
+FROM ${BASE_IMAGE}
+
+# Targets RDNA3 and Strix Halo while remaining explicit for hipcc.
+ENV HSA_XNACK=1 \
+    HSA_ENABLE_SDMA=0 \
+    PYTORCH_ROCM_ARCH=gfx1100,gfx1151
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    git \
+    build-essential \
+    cmake \
+    ninja-build \
+    libglm-dev \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /workspace/gsplat
+COPY . /workspace/gsplat
+
+# BUILD_WITH_HIP=1 is meant for machines with ROCm toolchain/runtime.
+ARG BUILD_WITH_HIP=0
+RUN python -m pip install --no-cache-dir --upgrade pip setuptools wheel && \
+    if [ "${BUILD_WITH_HIP}" = "1" ]; then \
+      MAX_JOBS=4 python -m pip install --no-cache-dir .; \
+    else \
+      BUILD_NO_CUDA=1 python -m pip install --no-cache-dir .; \
+    fi
+
+CMD ["bash"]

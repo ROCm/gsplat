@@ -10,7 +10,7 @@ To use GSplat, you need the following prerequisites:
 
 - **ROCm**: version 6.4.3, 7.0.0 (recommended)
 - **Operating system**: Ubuntu 22.04, 24.04  
-- **GPU platform**: AMD Instinct™ MI300X  
+- **GPU platform**: AMD Instinct™ MI325X/MI300X, Radeon™ RX 7900 series (gfx1100), Ryzen™ AI Max/Strix Halo (gfx1151)  
 - **PyTorch**: version 2.6, 2.8 (ROCm-enabled)  
 - **Python**: version 3.10, 3.12  
 
@@ -75,7 +75,22 @@ To use GSplat, you need the following prerequisites:
    Author: AMD Corporation
    License: Apache 2.0
    Location: /opt/conda/envs/py_3.12/lib/python3.12/site-packages
-   Requires: jaxtyping, ninja, numpy, rich, torch
+    Requires: jaxtyping, ninja, numpy, rich, torch
+
+
+6. For source builds, set explicit ROCm targets when building for gfx11 hardware:
+
+   ```bash
+   export PYTORCH_ROCM_ARCH=gfx1100,gfx1151
+   ```
+
+7. Optional containerized smoke path for gfx11:
+
+   ```bash
+   docker build -f docker/Dockerfile.rocm-gfx11 --build-arg BUILD_WITH_HIP=1 -t gsplat-rocm-gfx11 .
+   docker run --rm --device=/dev/kfd --device=/dev/dri --group-add video gsplat-rocm-gfx11 \
+     python -c "import torch, gsplat; print(torch.cuda.is_available(), gsplat.__version__)"
+   ```
 
 
 ## Examples
