@@ -12,7 +12,7 @@ flavor defines the site header display, select the flavor for the corresponding 
 flavor options: rocm, rocm-docs-home, rocm-blogs, rocm-ds, instinct, ai-developer-hub, local, generic
 '''
 html_theme = "rocm_docs_theme"
-html_theme_options = {"flavor": "rocm-simulation", "repository_url": "https://github.com/ROCm/gsplat/"}
+html_theme_options = {"flavor": "rocm-simulation", "repository_url": "https://github.com/AMD-Ecosystem/gsplat/"}
 
 '''
 docs_header_version is used to manually configure the version in the header. If
