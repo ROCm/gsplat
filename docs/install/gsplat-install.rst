@@ -14,7 +14,7 @@ This topic provides instructions for installing GSplat, a component that is part
 System requirements
 ====================================================================
 
-To use GSplat (Gaussian splatting) `1.5.3b1 <https://github.com/ROCm/gsplat/tree/release/1.5.3b1>`__, you need the following prerequisites:
+To use GSplat (Gaussian splatting) `1.5.3b1 <https://github.com/AMD-Ecosystem/gsplat/tree/release/1.5.3b1>`__, you need the following prerequisites:
 
 - **ROCm version**: `6.4.3 <https://repo.radeon.com/rocm/apt/6.4.3/>`__ (recommended)
 - **Operating system:** Ubuntu 24.04
@@ -72,7 +72,7 @@ Docker is the recommended method to set up your environment, as it avoids potent
       Name: amd_gsplat
       Version: 1.5.3+4ae1c82
       Summary: Python package for differentiable rasterization of Gaussians
-      Home-page: https://github.com/rocm/gsplat
+      Home-page: https://github.com/AMD-Ecosystem/gsplat
       Author: AMD Corporation
       License: Apache 2.0
       Location: /opt/conda/envs/py_3.12/lib/python3.12/site-packages
@@ -126,7 +126,7 @@ Build steps
 
    .. code-block:: bash
 
-      git clone --recurse-submodules https://github.com/rocm/gsplat.git
+      git clone --recurse-submodules https://github.com/AMD-Ecosystem/gsplat.git
 
 2. Install the GLM dependency:
 
@@ -193,7 +193,7 @@ A set of examples is available to help you get started. See :doc:`Run a GSplat e
 Benchmarking and evaluation
 ====================================================================
 
-The `https://github.com/ROCm/gsplat <https://github.com/ROCm/gsplat>`_ repository includes a standalone script that reproduces the 
+The `https://github.com/AMD-Ecosystem/gsplat <https://github.com/AMD-Ecosystem/gsplat>`_ repository includes a standalone script that reproduces the 
 official Gaussian Splatting results with matching performance on ``PSNR``, ``SSIM``, ``LPIPS``, and the converged number of Gaussians.
 See :doc:`benchmarks <../reference/benchmark-evaluation>` for more details.
 
