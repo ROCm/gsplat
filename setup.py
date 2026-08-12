@@ -223,6 +223,9 @@ def get_extensions():
 	# Its still nvcc flags that are used for HIP compilation
         extra_compile_args["nvcc"] = hipcc_flags
         current_dir = pathlib.Path(__file__).parent.resolve()
+        glm_include_path = osp.join(
+            current_dir, "gsplat", "cuda", "csrc", "third_party", "glm"
+        )
 
         include_dirs = [
             osp.join(current_dir, "gsplat", "cuda", "include"),
@@ -231,6 +234,31 @@ def get_extensions():
             f"/opt/conda/envs/py_3.12/lib/python3.12/site-packages/",
             f"/opt/rocm/include",
         ]
+
+        # Deliberately NOT adding glm_include_path to include_dirs above.
+        # torch.utils.cpp_extension.CUDAExtension() forwards its
+        # include_dirs kwarg straight into hipify_python.hipify(...,
+        # header_include_dirs=include_dirs), which then walks and
+        # *rewrites* every header found under those directories (e.g.
+        # __CUDACC__ -> __HIPCC__). Doing that to the vendored glm
+        # submodule corrupts glm's own compiler-detection macros in
+        # glm/simd/platform.h: it flips the "#elif defined(__HIPCC__)"
+        # branch on (true under hipcc) *before* glm's real "#elif
+        # defined(__HIP__)" branch is reached, so glm thinks it's being
+        # compiled by CUDA-with-no-CUDACC-version and aborts with
+        # "GLM requires CUDA 7.0 or higher" / GLM_COMPILER undefined,
+        # which cascades into "no matching function" errors for every
+        # glm::mat/vec op. Confirmed via `git -C third_party/glm diff`
+        # after a build showing exactly that mutation.
+        #
+        # Instead, reach glm only through explicit -I flags on the
+        # compile-arg lists, which are never passed to hipify's
+        # header_include_dirs scan and only reach the actual compiler
+        # invocation. This is done for both the cxx path (plain .cpp
+        # sources) and the nvcc/hipcc path (.hip sources) so glm resolves
+        # for both compilers without also being mutated.
+        extra_compile_args["cxx"] += [f"-I{glm_include_path}"]
+        hipcc_flags += [f"-I{glm_include_path}"]
 
         extension = CUDAExtension(
             # Make sure this matches your package structure
